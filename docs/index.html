@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lunar DE — Modular C++20 X11 Desktop Environment</title>
+  <style>
+    :root {
+      --bg: #0b101b;
+      --surface: #131a29;
+      --surface-2: #1a2336;
+      --border: rgba(148, 163, 184, 0.16);
+      --accent: #38bdf8;
+      --accent-2: #818cf8;
+      --emerald: #34d399;
+      --text: #f1f5f9;
+      --muted: #94a3b8;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
+      background: radial-gradient(circle at 20% 0%, #162442 0%, var(--bg) 55%);
+      color: var(--text);
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .container { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+
+    /* Nav */
+    nav {
+      position: sticky; top: 0; z-index: 20;
+      backdrop-filter: blur(14px);
+      background: rgba(11, 16, 27, 0.78);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-inner {
+      display: flex; align-items: center; justify-content: space-between;
+      height: 60px;
+    }
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 1.05rem; color: var(--text); }
+    .nav-links { display: flex; gap: 22px; font-size: 0.92rem; }
+    .nav-links a { color: var(--muted); }
+    .nav-links a:hover { color: var(--text); text-decoration: none; }
+
+    /* Hero */
+    .hero { padding: 72px 0 56px; text-align: center; }
+    .pill-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-bottom: 20px; }
+    .pill {
+      font-size: 0.78rem; font-weight: 600; letter-spacing: 0.02em;
+      padding: 4px 12px; border-radius: 999px;
+      background: rgba(56, 189, 248, 0.12);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      color: #bae6fd;
+    }
+    h1 {
+      font-size: clamp(2.4rem, 5vw, 3.8rem);
+      line-height: 1.1; font-weight: 800; letter-spacing: -0.03em;
+      background: linear-gradient(135deg, #ffffff 30%, #7dd3fc 70%, #a5b4fc 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      margin-bottom: 18px;
+    }
+    .subtitle {
+      max-width: 680px; margin: 0 auto 30px;
+      color: var(--muted); font-size: 1.1rem;
+    }
+    .cta-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 14px; margin-bottom: 44px; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 12px 22px; border-radius: 10px; font-weight: 600; font-size: 0.95rem;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    .btn:hover { transform: translateY(-1px); text-decoration: none; }
+    .btn-primary {
+      background: linear-gradient(135deg, #2563eb, #0284c7);
+      color: #fff; box-shadow: 0 8px 24px rgba(37, 99, 235, 0.35);
+    }
+    .btn-ghost {
+      background: var(--surface); color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    /* Interactive Desktop Preview */
+    .preview-shell {
+      max-width: 900px; margin: 0 auto;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 18px; padding: 16px; box-shadow: 0 24px 64px rgba(0,0,0,0.45);
+    }
+    .preview-controls {
+      display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;
+      margin-bottom: 12px; font-size: 0.85rem; color: var(--muted);
+    }
+    .toggle-group { display: flex; gap: 6px; background: var(--bg); padding: 4px; border-radius: 10px; }
+    .toggle-btn {
+      border: none; background: transparent; color: var(--muted); cursor: pointer;
+      padding: 6px 14px; border-radius: 7px; font-weight: 600; font-size: 0.82rem;
+    }
+    .toggle-btn.active { background: #2563eb; color: #fff; }
+    .desktop-canvas {
+      position: relative; width: 100%; aspect-ratio: 16/9;
+      border-radius: 12px; overflow: hidden;
+      background: url('assets/01_lunar_eclipse.jpg') center/cover no-repeat;
+      transition: background-image 0.4s ease;
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+    .mock-bar {
+      position: absolute; left: 0; right: 0;
+      background: rgba(15, 23, 42, 0.78); backdrop-filter: blur(10px);
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 14px; font-size: 0.78rem; color: #e2e8f0;
+      transition: all 0.25s ease;
+    }
+    .mock-bar.top { top: 0; height: 30px; border-bottom: 1px solid rgba(255,255,255,0.1); }
+    .mock-bar.taskbar { bottom: 0; height: 44px; border-top: 1px solid rgba(255,255,255,0.14); }
+    .mock-dots { display: flex; align-items: center; gap: 8px; }
+    .ws-pill { width: 20px; height: 6px; border-radius: 99px; background: #f8fafc; }
+    .ws-dot { width: 6px; height: 6px; border-radius: 50%; background: rgba(255,255,255,0.4); }
+    .mock-center { display: flex; align-items: center; gap: 8px; }
+    .start-btn {
+      width: 28px; height: 28px; border-radius: 7px;
+      background: rgba(56,189,248,0.18); border: 1px solid rgba(56,189,248,0.4);
+      display: grid; grid-template-columns: repeat(3, 4px); gap: 2px; place-content: center;
+    }
+    .start-btn span { width: 4px; height: 4px; border-radius: 50%; background: #38bdf8; }
+    .win-pill {
+      padding: 4px 12px; border-radius: 6px; background: rgba(255,255,255,0.12);
+      border-bottom: 2px solid #38bdf8; font-size: 0.74rem;
+    }
+    .mock-window {
+      position: absolute; left: 16%; top: 18%; width: 62%; height: 58%;
+      background: rgba(22, 26, 34, 0.94); border-radius: 12px;
+      border: 2px solid #38bdf8; box-shadow: 0 18px 40px rgba(0,0,0,0.5);
+      overflow: hidden; display: flex; flex-direction: column;
+    }
+    .mock-titlebar {
+      height: 28px; background: #1e293b; display: flex; align-items: center;
+      justify-content: space-between; padding: 0 12px; font-size: 0.76rem; color: #cbd5e1;
+    }
+    .mock-term {
+      padding: 14px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.78rem; color: #34d399; text-align: left;
+    }
+
+    /* Sections */
+    section { padding: 64px 0; }
+    h2 { font-size: 1.9rem; font-weight: 700; margin-bottom: 10px; letter-spacing: -0.02em; }
+    .section-desc { color: var(--muted); margin-bottom: 32px; max-width: 640px; }
+
+    .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 18px; }
+    .card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 14px; padding: 22px;
+    }
+    .card h3 { font-size: 1.05rem; margin-bottom: 8px; color: #f8fafc; }
+    .card p { font-size: 0.9rem; color: var(--muted); }
+    .badge {
+      display: inline-block; font-size: 0.72rem; font-weight: 600;
+      padding: 2px 8px; border-radius: 6px; margin-bottom: 10px;
+      background: rgba(52, 211, 153, 0.14); color: #6ee7b7;
+    }
+
+    /* Wallpaper Gallery */
+    .wp-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+    .wp-card {
+      cursor: pointer; border-radius: 12px; overflow: hidden;
+      border: 2px solid transparent; background: var(--surface);
+      transition: transform 0.15s ease, border-color 0.15s ease;
+    }
+    .wp-card:hover { transform: translateY(-2px); border-color: var(--accent); }
+    .wp-card img { width: 100%; aspect-ratio: 16/9; object-fit: cover; display: block; }
+    .wp-card span { display: block; padding: 8px 12px; font-size: 0.84rem; color: var(--muted); }
+
+    /* Code & Shortcuts */
+    pre {
+      background: #0d1321; border: 1px solid var(--border); border-radius: 12px;
+      padding: 18px; overflow-x: auto; font-size: 0.88rem; color: #e2e8f0;
+      margin-bottom: 18px;
+    }
+    table { width: 100%; border-collapse: collapse; background: var(--surface); border-radius: 12px; overflow: hidden; }
+    th, td { padding: 12px 16px; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
+    th { color: #cbd5e1; background: var(--surface-2); }
+    td kbd {
+      background: #0b101b; border: 1px solid var(--border); border-radius: 6px;
+      padding: 2px 7px; font-family: ui-monospace, monospace; font-size: 0.82rem; color: #7dd3fc;
+    }
+
+    footer {
+      border-top: 1px solid var(--border); padding: 32px 0;
+      text-align: center; color: var(--muted); font-size: 0.88rem;
+    }
+  </style>
+</head>
+<body>
+  <nav>
+    <div class="container nav-inner">
+      <div class="brand">
+        <svg width="26" height="26" viewBox="0 0 128 128">
+          <rect x="8" y="8" width="112" height="112" rx="26" fill="#0f172a" stroke="#38bdf8" stroke-width="5"/>
+          <path d="M74 34a30 30 0 1 0 20 52 24 24 0 1 1-20-52z" fill="#38bdf8"/>
+        </svg>
+        Lunar DE
+      </div>
+      <div class="nav-links">
+        <a href="#features">Features</a>
+        <a href="#wallpapers">Wallpapers</a>
+        <a href="#install">Install</a>
+        <a href="#shortcuts">Shortcuts</a>
+        <a href="https://github.com/Lunar-Entertainment/Lunar_DE" target="_blank">GitHub</a>
+      </div>
+    </div>
+  </nav>
+
+  <header class="hero container">
+    <div class="pill-row">
+      <span class="pill">C++20</span>
+      <span class="pill">X11 / libxcb</span>
+      <span class="pill">Multi-Monitor RandR</span>
+      <span class="pill">Gemini Live</span>
+      <span class="pill">Antigravity MCP Plugin</span>
+    </div>
+    <h1>A Minimal, Modular X11<br/>Desktop Environment</h1>
+    <p class="subtitle">
+      Built from the ground up in C++20 on top of <code>libxcb</code>. Featuring Aero Snap,
+      true per-monitor wallpapers, switchable Top Bar &amp; Windows 11 Taskbar layouts,
+      32+ wallpapers with auto-rotate fade-in, Gemini Live voice control, and an Antigravity MCP plugin.
+    </p>
+    <div class="cta-row">
+      <a class="btn btn-primary" href="#install">Install Lunar DE</a>
+      <a class="btn btn-ghost" href="https://github.com/Lunar-Entertainment/Lunar_DE" target="_blank">View on GitHub</a>
+    </div>
+
+    <div class="preview-shell">
+      <div class="preview-controls">
+        <span>Interactive Preview — click any wallpaper below or switch bar layout</span>
+        <div class="toggle-group">
+          <button class="toggle-btn active" id="btn-top" onclick="setLayout('top')">Top Bar</button>
+          <button class="toggle-btn" id="btn-taskbar" onclick="setLayout('taskbar')">Taskbar (Win 11)</button>
+        </div>
+      </div>
+      <div class="desktop-canvas" id="desktop-canvas">
+        <div class="mock-window">
+          <div class="mock-titlebar">
+            <span>lunar@desktop: ~/Lunar_DE</span>
+            <span>&#x2500; &nbsp; &#x25A1; &nbsp; &#x2715;</span>
+          </div>
+          <div class="mock-term">
+            $ ./run_dev.sh -m 2<br/>
+            [lunar] Mounted 2 virtual RandR monitors on :2.<br/>
+            [lunar] Lunar DE is live on DISPLAY=:2!<br/>
+            $ _
+          </div>
+        </div>
+        <div class="mock-bar top" id="mock-bar">
+          <div class="mock-dots">
+            <div class="ws-pill"></div>
+            <div class="ws-dot"></div>
+          </div>
+          <div class="mock-center" id="mock-center">
+            <span id="mock-clock">nov 19 &nbsp; 18:48</span>
+          </div>
+          <div class="mock-dots">
+            <span style="color:#34d399">&#x25CF;</span>
+            <span>&gt;_</span>
+            <span>Wi-Fi</span>
+            <span>Vol</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <section id="features" class="container">
+    <h2>Built From Scratch for Speed &amp; Control</h2>
+    <p class="section-desc">
+      Two lightweight C++20 binaries (<code>lunar-wm</code> and <code>lunar-panel</code>) with zero GNOME/KDE desktop shell bloat.
+    </p>
+    <div class="grid-3">
+      <div class="card">
+        <span class="badge">Window Manager</span>
+        <h3>Aero Snap &amp; Full CSD Support</h3>
+        <p>Drag any window—including Electron &amp; Chromium apps like Antigravity via <code>_NET_WM_MOVERESIZE</code>—to the top edge to maximize or left/right edges to half-snap with a live rounded preview overlay.</p>
+      </div>
+      <div class="card">
+        <span class="badge">Multi-Monitor</span>
+        <h3>Per-Monitor RandR &amp; Swap</h3>
+        <p>Queries <code>xcb_randr_get_monitors</code> for unstretched per-monitor wallpapers, per-monitor maximize/snap/fullscreen, and one-click persistent Left/Right monitor swapping.</p>
+      </div>
+      <div class="card">
+        <span class="badge">Appearance</span>
+        <h3>Top Bar &amp; Windows 11 Taskbar</h3>
+        <p>Switch instantly between the sleek 28px Top Bar and the centered 44px Windows 11 bottom Taskbar with pinned app icons and automatic EWMH strut updates.</p>
+      </div>
+      <div class="card">
+        <span class="badge">Desktop &amp; Apps</span>
+        <h3>SVG/PNG Icons &amp; Desktop Pinning</h3>
+        <p>Full Zorin/Flatpak/system app menu with search, category filters, SVG/PNG icon rendering, right-click to pin to Desktop, and middle-click to pin to the Taskbar.</p>
+      </div>
+      <div class="card">
+        <span class="badge">Voice AI</span>
+        <h3>Built-In Gemini Live</h3>
+        <p>Press <code>Super + G</code> or click the panel orb to talk to Gemini Live over bidirectional audio with desktop tool calling (launch apps, set volume, change wallpapers).</p>
+      </div>
+      <div class="card">
+        <span class="badge">Antigravity Plugin</span>
+        <h3>PC Control MCP Server</h3>
+        <p>Ships with a self-contained Antigravity (<code>agy</code>) plugin exposing 9 MCP tools so Gemini models can inspect windows, capture screenshots, launch apps, and configure Lunar DE.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="wallpapers" class="container">
+    <h2>32 Free Wallpapers + Smooth Auto-Rotate</h2>
+    <p class="section-desc">
+      Click any preview below to test it live in the desktop canvas above. Lunar DE includes 32 bundled 1080p wallpapers plus a 33rd <strong>Cycle All (15s)</strong> option with smoothstep cross-fading.
+    </p>
+    <div class="wp-grid">
+      <div class="wp-card" onclick="setWp('assets/01_lunar_eclipse.jpg')"><img src="assets/01_lunar_eclipse.jpg" alt="Lunar Eclipse"/><span>01 · Lunar Eclipse</span></div>
+      <div class="wp-card" onclick="setWp('assets/02_nordic_aurora.jpg')"><img src="assets/02_nordic_aurora.jpg" alt="Nordic Aurora"/><span>02 · Nordic Aurora</span></div>
+      <div class="wp-card" onclick="setWp('assets/04_ocean_horizon.jpg')"><img src="assets/04_ocean_horizon.jpg" alt="Ocean Horizon"/><span>04 · Ocean Horizon</span></div>
+      <div class="wp-card" onclick="setWp('assets/05_cyber_synthwave.jpg')"><img src="assets/05_cyber_synthwave.jpg" alt="Cyber Synthwave"/><span>05 · Cyber Synthwave</span></div>
+      <div class="wp-card" onclick="setWp('assets/13_cosmic_nebula.jpg')"><img src="assets/13_cosmic_nebula.jpg" alt="Cosmic Nebula"/><span>13 · Cosmic Nebula</span></div>
+      <div class="wp-card" onclick="setWp('assets/17_midnight_fjord.jpg')"><img src="assets/17_midnight_fjord.jpg" alt="Midnight Fjord"/><span>17 · Midnight Fjord</span></div>
+      <div class="wp-card" onclick="setWp('assets/25_golden_hour_bay.jpg')"><img src="assets/25_golden_hour_bay.jpg" alt="Golden Hour Bay"/><span>25 · Golden Hour Bay</span></div>
+      <div class="wp-card" onclick="setWp('assets/27_cobalt_velocity.jpg')"><img src="assets/27_cobalt_velocity.jpg" alt="Cobalt Velocity"/><span>27 · Cobalt Velocity</span></div>
+    </div>
+  </section>
+
+  <section id="install" class="container">
+    <h2>Quick Start &amp; Installation</h2>
+    <p class="section-desc">Test live inside an isolated Xephyr window (including virtual multi-monitor mode) or install as a real X11 login session.</p>
+    <pre><code>git clone https://github.com/Lunar-Entertainment/Lunar_DE.git
+cd Lunar_DE
+
+# Test live in Xephyr (single monitor or 2 virtual RandR monitors)
+./run_dev.sh
+./run_dev.sh -m 2
+
+# Install as a real system X11 session (/usr/share/xsessions/lunar.desktop)
+./install.sh</code></pre>
+  </section>
+
+  <section id="shortcuts" class="container">
+    <h2>Keyboard Shortcuts</h2>
+    <table>
+      <thead>
+        <tr><th>Shortcut</th><th>Action</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><kbd>Super</kbd></td><td>Open / close App Menu</td></tr>
+        <tr><td><kbd>Super</kbd> + <kbd>G</kbd></td><td>Open Gemini Live voice assistant</td></tr>
+        <tr><td><kbd>Super</kbd> + <kbd>Return</kbd></td><td>Launch terminal</td></tr>
+        <tr><td><kbd>Super</kbd> + <kbd>Up</kbd> / <kbd>Down</kbd></td><td>Maximize / restore focused window</td></tr>
+        <tr><td><kbd>Super</kbd> + <kbd>Left</kbd> / <kbd>Right</kbd></td><td>Snap window to left / right half</td></tr>
+        <tr><td><kbd>Super</kbd> + <kbd>F</kbd></td><td>Toggle fullscreen</td></tr>
+        <tr><td><kbd>Alt</kbd> + <kbd>Tab</kbd> / <kbd>Super</kbd> + <kbd>Tab</kbd></td><td>Cycle window focus</td></tr>
+        <tr><td><kbd>Super</kbd> + <kbd>Q</kbd> / <kbd>Alt</kbd> + <kbd>F4</kbd></td><td>Close focused window</td></tr>
+        <tr><td><kbd>Super</kbd> + <kbd>Escape</kbd></td><td>Exit Lunar DE session cleanly</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <footer>
+    <div class="container">
+      Lunar DE · Built in C++20 with libxcb · <a href="https://github.com/Lunar-Entertainment/Lunar_DE">github.com/Lunar-Entertainment/Lunar_DE</a>
+    </div>
+  </footer>
+
+  <script>
+    function setLayout(mode) {
+      const bar = document.getElementById('mock-bar');
+      const center = document.getElementById('mock-center');
+      document.getElementById('btn-top').classList.toggle('active', mode === 'top');
+      document.getElementById('btn-taskbar').classList.toggle('active', mode === 'taskbar');
+      bar.className = 'mock-bar ' + mode;
+      if (mode === 'taskbar') {
+        center.innerHTML =
+          '<div class="start-btn"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>' +
+          '<div class="win-pill">lunar@desktop: ~/Lunar_DE</div>';
+      } else {
+        center.innerHTML = '<span id="mock-clock">nov 19 &nbsp; 18:48</span>';
+      }
+    }
+    function setWp(src) {
+      document.getElementById('desktop-canvas').style.backgroundImage = "url('" + src + "')";
+    }
+  </script>
+</body>
+</html>
