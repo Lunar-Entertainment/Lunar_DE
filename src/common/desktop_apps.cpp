@@ -444,16 +444,31 @@ void AppRegistry::load() {
     if (!batch.empty()) {
         std::error_code ec;
         fs::create_directories(cache_dir, ec);
-        const char* helper = nullptr;
-        if (fs::exists("/usr/local/share/lunar-de/scripts/render_icons.py", ec)) {
-            helper = "python3 /usr/local/share/lunar-de/scripts/render_icons.py 2>/dev/null";
-        } else if (fs::exists("/usr/share/lunar-de/scripts/render_icons.py", ec)) {
-            helper = "python3 /usr/share/lunar-de/scripts/render_icons.py 2>/dev/null";
-        } else if (fs::exists("/home/lunar/Lunar_DE/scripts/render_icons.py", ec)) {
-            helper = "python3 /home/lunar/Lunar_DE/scripts/render_icons.py 2>/dev/null";
+        std::string helper_script;
+        const std::string self_exe = resolve_self_exe_path("");
+        if (!self_exe.empty()) {
+            const fs::path exe_cand =
+                fs::path(self_exe).parent_path().parent_path() / "share" / "lunar-de" / "scripts" / "render_icons.py";
+            if (fs::exists(exe_cand, ec)) {
+                helper_script = exe_cand.lexically_normal().string();
+            }
         }
-        if (helper) {
-            FILE* pipe = popen(helper, "w");
+        if (helper_script.empty()) {
+            const std::array<const char*, 3> fallbacks = {
+                "/usr/share/lunar-de/scripts/render_icons.py",
+                "/usr/local/share/lunar-de/scripts/render_icons.py",
+                "/home/lunar/Lunar_DE/scripts/render_icons.py",
+            };
+            for (const char* cand : fallbacks) {
+                if (fs::exists(cand, ec)) {
+                    helper_script = cand;
+                    break;
+                }
+            }
+        }
+        if (!helper_script.empty()) {
+            const std::string helper = "python3 '" + helper_script + "' 2>/dev/null";
+            FILE* pipe = popen(helper.c_str(), "w");
             if (pipe) {
                 std::fwrite(batch.data(), 1, batch.size(), pipe);
                 pclose(pipe);
@@ -560,14 +575,19 @@ void AppRegistry::launch_app(const DesktopApp& app) {
     const char* disp = std::getenv("DISPLAY");
     const std::string display_str = (disp && *disp) ? disp : ":0";
 
-    // Ensure Flatpak apps inherit DISPLAY and X11 backend flags inside sandbox
+    // Ensure Flatpak apps inherit DISPLAY and X11 backend flags cleanly inside sandbox
     const size_t fp_pos = cmd.find("flatpak run");
     if (fp_pos != std::string::npos) {
         const size_t insert_at = fp_pos + 11;
         const std::string extra =
             " --env=DISPLAY=" + display_str +
             " --env=GDK_BACKEND=x11 --env=QT_QPA_PLATFORM=xcb"
-            " --env=ELECTRON_OZONE_PLATFORM_HINT=x11";
+            " --env=ELECTRON_OZONE_PLATFORM_HINT=x11"
+            " --env=NO_AT_BRIDGE=1 --env=GTK_A11Y=none"
+            " --env=XDG_CURRENT_DESKTOP=Lunar"
+            " --unset-env=WAYLAND_DISPLAY --unset-env=GTK_MODULES"
+            " --unset-env=GTK3_MODULES --unset-env=QT_ACCESSIBILITY"
+            " --unset-env=GIO_USE_VFS";
         cmd.insert(insert_at, extra);
     }
 
@@ -603,6 +623,10 @@ void AppRegistry::launch_app(const DesktopApp& app) {
         }
         if (!app.working_dir.empty()) {
             if (chdir(app.working_dir.c_str()) != 0) {
+                // ignore if directory missing
+            }
+        } else if (const char* home = std::getenv("HOME"); home && *home) {
+            if (chdir(home) != 0) {
                 // ignore if directory missing
             }
         }

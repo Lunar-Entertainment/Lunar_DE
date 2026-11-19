@@ -94,6 +94,7 @@ inline void prepare_x11_app_env() {
     unsetenv("GNOME_DESKTOP_SESSION_ID");
     unsetenv("GNOME_SHELL_SESSION_MODE");
     unsetenv("GTK_MODULES");
+    unsetenv("GTK3_MODULES");
     unsetenv("QT_ACCESSIBILITY");
     setenv("GDK_BACKEND", "x11", 1);
     setenv("QT_QPA_PLATFORM", "xcb", 1);

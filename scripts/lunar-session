@@ -4,10 +4,10 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if [[ -d "${SCRIPT_DIR}/../share/lunar-de" ]]; then
     SHARE_DIR="$(cd "${SCRIPT_DIR}/../share/lunar-de" && pwd)"
-elif [[ -d "/usr/local/share/lunar-de" ]]; then
-    SHARE_DIR="/usr/local/share/lunar-de"
-else
+elif [[ -d "/usr/share/lunar-de" ]]; then
     SHARE_DIR="/usr/share/lunar-de"
+else
+    SHARE_DIR="/usr/local/share/lunar-de"
 fi
 
 if [[ -x "${SCRIPT_DIR}/lunar-panel" ]]; then
@@ -22,7 +22,7 @@ else
     LUNAR_WM="$(command -v lunar-wm || echo /usr/bin/lunar-wm)"
 fi
 
-unset WAYLAND_DISPLAY GIO_USE_VFS SESSION_MANAGER GNOME_DESKTOP_SESSION_ID GNOME_SHELL_SESSION_MODE GTK_MODULES QT_ACCESSIBILITY
+unset WAYLAND_DISPLAY GIO_USE_VFS SESSION_MANAGER GNOME_DESKTOP_SESSION_ID GNOME_SHELL_SESSION_MODE GTK_MODULES GTK3_MODULES QT_ACCESSIBILITY
 export DESKTOP_SESSION=lunar
 export XDG_SESSION_DESKTOP=lunar
 export XDG_SESSION_TYPE=x11
@@ -60,7 +60,7 @@ PID_FILE="/tmp/lunar-de-pids.txt"
 if command -v systemctl >/dev/null 2>&1; then
     systemctl --user unset-environment \
         WAYLAND_DISPLAY GIO_USE_VFS SESSION_MANAGER GNOME_DESKTOP_SESSION_ID \
-        GNOME_SHELL_SESSION_MODE GTK_MODULES QT_ACCESSIBILITY \
+        GNOME_SHELL_SESSION_MODE GTK_MODULES GTK3_MODULES QT_ACCESSIBILITY \
         2>/dev/null || true
     systemctl --user import-environment \
         DISPLAY XAUTHORITY LANG LC_ALL DESKTOP_SESSION XDG_SESSION_DESKTOP \

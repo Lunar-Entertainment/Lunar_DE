@@ -132,6 +132,8 @@ private:
     void restore_window(xcb_window_t win);
     void move_client_to_desktop(xcb_window_t win, uint32_t target);
     void update_wm_state_property(xcb_window_t win, const ClientWindow& cw);
+    void set_icccm_wm_state(xcb_window_t win, uint32_t state);
+    void send_configure_notify(const ClientWindow& cw);
     void raise_docks();
 
     void focus_window(xcb_window_t win);
@@ -175,7 +177,9 @@ private:
 
     xcb_atom_t wm_protocols_atom_ = XCB_ATOM_NONE;
     xcb_atom_t wm_delete_window_atom_ = XCB_ATOM_NONE;
+    xcb_atom_t wm_take_focus_atom_ = XCB_ATOM_NONE;
     xcb_atom_t wm_state_atom_ = XCB_ATOM_NONE;
+    xcb_atom_t wm_change_state_atom_ = XCB_ATOM_NONE;
     xcb_atom_t motif_wm_hints_atom_ = XCB_ATOM_NONE;
     xcb_atom_t gtk_frame_extents_atom_ = XCB_ATOM_NONE;
     xcb_atom_t lunar_panel_win_atom_ = XCB_ATOM_NONE;

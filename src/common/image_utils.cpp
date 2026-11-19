@@ -1,4 +1,5 @@
 #include "common/image_utils.hpp"
+#include "common/xcb_utils.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -110,27 +111,39 @@ std::string format_wallpaper_label(const fs::path& p) {
     return stem;
 }
 
+fs::path canonical_or_abs(const fs::path& p) {
+    if (p.empty()) return {};
+    std::error_code ec;
+    fs::path c = fs::weakly_canonical(p, ec);
+    if (!ec && !c.empty()) return c;
+    fs::path a = fs::absolute(p, ec);
+    return (!ec && !a.empty()) ? a : p;
+}
+
+std::string normalize_wallpaper_path(const std::string& path) {
+    if (path.empty() || path == kWallpaperCycleToken) return path;
+    return canonical_or_abs(fs::path(path)).string();
+}
+
 fs::path find_bundled_wallpapers_dir() {
     std::error_code ec;
-    char exe_buf[512]{};
-    const ssize_t len = readlink("/proc/self/exe", exe_buf, sizeof(exe_buf) - 1);
-    if (len > 0) {
-        exe_buf[len] = '\0';
-        const fs::path exe_dir = fs::path(exe_buf).parent_path();
-        const fs::path cand1 = exe_dir.parent_path() / "assets" / "wallpapers";
-        if (fs::exists(cand1, ec)) return cand1;
-        const fs::path cand2 = exe_dir / "assets" / "wallpapers";
-        if (fs::exists(cand2, ec)) return cand2;
+    std::vector<fs::path> candidates;
+    const std::string self_exe = resolve_self_exe_path("");
+    if (!self_exe.empty()) {
+        const fs::path exe_dir = fs::path(self_exe).parent_path();
+        candidates.push_back(exe_dir.parent_path() / "share" / "lunar-de" / "assets" / "wallpapers");
+        candidates.push_back(exe_dir.parent_path() / "assets" / "wallpapers");
+        candidates.push_back(exe_dir / "assets" / "wallpapers");
     }
-    if (fs::exists("assets/wallpapers", ec)) return fs::path("assets/wallpapers");
-    if (fs::exists("/usr/local/share/lunar-de/assets/wallpapers", ec)) {
-        return fs::path("/usr/local/share/lunar-de/assets/wallpapers");
-    }
-    if (fs::exists("/usr/share/lunar-de/assets/wallpapers", ec)) {
-        return fs::path("/usr/share/lunar-de/assets/wallpapers");
-    }
-    if (fs::exists("/home/lunar/Lunar_DE/assets/wallpapers", ec)) {
-        return fs::path("/home/lunar/Lunar_DE/assets/wallpapers");
+    candidates.emplace_back("/usr/share/lunar-de/assets/wallpapers");
+    candidates.emplace_back("/usr/local/share/lunar-de/assets/wallpapers");
+    candidates.emplace_back("assets/wallpapers");
+    candidates.emplace_back("/home/lunar/Lunar_DE/assets/wallpapers");
+
+    for (const auto& cand : candidates) {
+        if (!cand.empty() && fs::exists(cand, ec) && fs::is_directory(cand, ec)) {
+            return canonical_or_abs(cand);
+        }
     }
     return {};
 }
@@ -280,13 +293,31 @@ bool is_wallpaper_cycle_enabled() {
 bool write_cycle_active_wallpaper(const std::string& path) {
     std::ofstream out(kCycleActiveFile, std::ios::trunc);
     if (!out.is_open()) return false;
-    out << path << '\n';
+    out << normalize_wallpaper_path(path) << '\n';
     out.flush();
     return !out.fail();
 }
 
 std::string resolve_wallpaper_path() {
     std::error_code ec;
+    auto resolve_saved_entry = [&ec](const std::string& raw) -> std::string {
+        if (raw.empty()) return {};
+        if (fs::exists(raw, ec)) {
+            return canonical_or_abs(fs::path(raw)).string();
+        }
+        const fs::path bundled_dir = find_bundled_wallpapers_dir();
+        if (!bundled_dir.empty()) {
+            const fs::path fname = fs::path(raw).filename();
+            if (!fname.empty()) {
+                const fs::path bundled = bundled_dir / fname;
+                if (fs::exists(bundled, ec)) {
+                    return canonical_or_abs(bundled).string();
+                }
+            }
+        }
+        return {};
+    };
+
     const fs::path cfg = get_wallpaper_config_file();
     if (!cfg.empty() && fs::exists(cfg, ec)) {
         std::ifstream in(cfg);
@@ -302,19 +333,23 @@ std::string resolve_wallpaper_path() {
                     while (!active.empty() && (active.back() == '\n' || active.back() == '\r')) {
                         active.pop_back();
                     }
-                    if (!active.empty() && fs::exists(active, ec)) {
-                        return active;
+                    const std::string resolved_active = resolve_saved_entry(active);
+                    if (!resolved_active.empty()) {
+                        return resolved_active;
                     }
                 }
-            } else if (!saved.empty() && fs::exists(saved, ec)) {
-                return saved;
+            } else {
+                const std::string resolved_saved = resolve_saved_entry(saved);
+                if (!resolved_saved.empty()) {
+                    return resolved_saved;
+                }
             }
         }
     }
 
     if (const char* env_wp = std::getenv("LUNAR_WALLPAPER")) {
         if (*env_wp && fs::exists(env_wp, ec)) {
-            return env_wp;
+            return canonical_or_abs(fs::path(env_wp)).string();
         }
     }
 
@@ -327,8 +362,11 @@ std::string resolve_wallpaper_path() {
         if (fs::exists(p, ec)) return p;
     }
 
-    const fs::path bundled = find_bundled_wallpapers_dir() / "01_lunar_eclipse.jpg";
-    if (fs::exists(bundled, ec)) return bundled.string();
+    const fs::path bundled_dir = find_bundled_wallpapers_dir();
+    if (!bundled_dir.empty()) {
+        const fs::path bundled = bundled_dir / "01_lunar_eclipse.jpg";
+        if (fs::exists(bundled, ec)) return canonical_or_abs(bundled).string();
+    }
     return {};
 }
 
@@ -339,7 +377,7 @@ bool save_wallpaper_path(const std::string& path) {
     fs::create_directories(cfg.parent_path(), ec);
     std::ofstream out(cfg, std::ios::trunc);
     if (!out.is_open()) return false;
-    out << path << '\n';
+    out << normalize_wallpaper_path(path) << '\n';
     out.flush();
     out.close();
     return !out.fail();
@@ -363,7 +401,7 @@ std::vector<WallpaperEntry> collect_wallpapers() {
         std::vector<fs::path> paths;
         for (const auto& entry : fs::directory_iterator(bundled_dir, ec)) {
             if (entry.is_regular_file(ec) && is_supported_img(entry.path())) {
-                paths.push_back(entry.path());
+                paths.push_back(canonical_or_abs(entry.path()));
             }
         }
         std::sort(paths.begin(), paths.end());
@@ -379,7 +417,7 @@ std::vector<WallpaperEntry> collect_wallpapers() {
         std::vector<fs::path> paths;
         for (const auto& entry : fs::directory_iterator(sys_dir, ec)) {
             if (entry.is_regular_file(ec) && is_supported_img(entry.path())) {
-                paths.push_back(entry.path());
+                paths.push_back(canonical_or_abs(entry.path()));
             }
         }
         std::sort(paths.begin(), paths.end());
@@ -400,7 +438,7 @@ std::vector<WallpaperEntry> collect_wallpapers() {
             for (const auto& entry : fs::directory_iterator(cdir, ec)) {
                 if (entry.is_regular_file(ec) && is_supported_img(entry.path())) {
                     entries.push_back({format_wallpaper_label(entry.path()),
-                                       entry.path().string(), "Custom"});
+                                       canonical_or_abs(entry.path()).string(), "Custom"});
                 }
             }
         }

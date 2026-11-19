@@ -32,6 +32,28 @@ constexpr int16_t kCascadeStepPx = 28;
 constexpr int kBtnSize = 18;
 constexpr int kBtnGap = 8;
 constexpr int kBtnRightPad = 10;
+
+bool client_supports_protocol(xcb_connection_t* conn, xcb_window_t win,
+                              xcb_atom_t wm_protocols_atom, xcb_atom_t proto) {
+    if (!conn || win == XCB_WINDOW_NONE || wm_protocols_atom == XCB_ATOM_NONE ||
+        proto == XCB_ATOM_NONE) {
+        return false;
+    }
+    xcb_icccm_get_wm_protocols_reply_t protocols{};
+    auto cookie = xcb_icccm_get_wm_protocols(conn, win, wm_protocols_atom);
+    if (!xcb_icccm_get_wm_protocols_reply(conn, cookie, &protocols, nullptr)) {
+        return false;
+    }
+    bool supported = false;
+    for (uint32_t i = 0; i < protocols.atoms_len; ++i) {
+        if (protocols.atoms[i] == proto) {
+            supported = true;
+            break;
+        }
+    }
+    xcb_icccm_get_wm_protocols_reply_wipe(&protocols);
+    return supported;
+}
 } // namespace
 
 WindowManager::~WindowManager() {
@@ -123,7 +145,9 @@ bool WindowManager::init(const char* display_name) {
 
     wm_protocols_atom_ = intern_atom(conn_, "WM_PROTOCOLS");
     wm_delete_window_atom_ = intern_atom(conn_, "WM_DELETE_WINDOW");
+    wm_take_focus_atom_ = intern_atom(conn_, "WM_TAKE_FOCUS");
     wm_state_atom_ = intern_atom(conn_, "WM_STATE");
+    wm_change_state_atom_ = intern_atom(conn_, "WM_CHANGE_STATE");
     motif_wm_hints_atom_ = intern_atom(conn_, "_MOTIF_WM_HINTS");
     gtk_frame_extents_atom_ = intern_atom(conn_, "_GTK_FRAME_EXTENTS");
     lunar_panel_win_atom_ = intern_atom(conn_, ipc::kPanelWindowAtom);
@@ -406,13 +430,14 @@ void WindowManager::setup_ewmh() {
     xcb_ewmh_set_supporting_wm_check(&ewmh_, wm_check_win_, wm_check_win_);
     xcb_ewmh_set_wm_name(&ewmh_, wm_check_win_, 8, "lunar-wm");
 
-    std::array<xcb_atom_t, 21> supported = {
+    std::array<xcb_atom_t, 22> supported = {
         ewmh_._NET_SUPPORTED,
         ewmh_._NET_ACTIVE_WINDOW,
         ewmh_._NET_CLIENT_LIST,
         ewmh_._NET_CLIENT_LIST_STACKING,
         ewmh_._NET_SUPPORTING_WM_CHECK,
         ewmh_._NET_WM_NAME,
+        ewmh_._NET_WM_DESKTOP,
         ewmh_._NET_WORKAREA,
         ewmh_._NET_NUMBER_OF_DESKTOPS,
         ewmh_._NET_CURRENT_DESKTOP,
@@ -747,6 +772,28 @@ bool WindowManager::is_dock_window(xcb_window_t win) const {
 }
 
 bool WindowManager::should_decorate(xcb_window_t win) const {
+    if (ewmh_initialized_) {
+        xcb_ewmh_get_atoms_reply_t types{};
+        auto cookie = xcb_ewmh_get_wm_window_type(&ewmh_, win);
+        if (xcb_ewmh_get_wm_window_type_reply(&ewmh_, cookie, &types, nullptr)) {
+            bool suppress = false;
+            for (uint32_t i = 0; i < types.atoms_len; ++i) {
+                const xcb_atom_t t = types.atoms[i];
+                if (t == ewmh_._NET_WM_WINDOW_TYPE_SPLASH ||
+                    t == ewmh_._NET_WM_WINDOW_TYPE_UTILITY ||
+                    t == ewmh_._NET_WM_WINDOW_TYPE_NOTIFICATION ||
+                    t == ewmh_._NET_WM_WINDOW_TYPE_TOOLTIP ||
+                    t == ewmh_._NET_WM_WINDOW_TYPE_DROPDOWN_MENU ||
+                    t == ewmh_._NET_WM_WINDOW_TYPE_POPUP_MENU) {
+                    suppress = true;
+                    break;
+                }
+            }
+            xcb_ewmh_get_atoms_reply_wipe(&types);
+            if (suppress) return false;
+        }
+    }
+
     if (gtk_frame_extents_atom_ != XCB_ATOM_NONE) {
         auto gc = xcb_get_property(conn_, 0, win, gtk_frame_extents_atom_, XCB_ATOM_CARDINAL, 0, 4);
         UniqueMalloc<xcb_get_property_reply_t> gr(xcb_get_property_reply(conn_, gc, nullptr));
@@ -1034,6 +1081,33 @@ void WindowManager::clamp_rect_to_workarea(Rect& rect) const {
     rect.y = static_cast<int16_t>(std::clamp<int>(rect.y, min_y, std::max(min_y, max_y)));
 }
 
+void WindowManager::set_icccm_wm_state(xcb_window_t win, uint32_t state) {
+    if (wm_state_atom_ == XCB_ATOM_NONE) return;
+    const uint32_t wm_state_data[2] = {state, XCB_WINDOW_NONE};
+    xcb_change_property(conn_, XCB_PROP_MODE_REPLACE, win, wm_state_atom_,
+                        wm_state_atom_, 32, 2, wm_state_data);
+}
+
+void WindowManager::send_configure_notify(const ClientWindow& cw) {
+    const uint16_t title_h = titlebar_height_for(cw);
+    const uint16_t client_h = (cw.rect.height > title_h)
+                                  ? static_cast<uint16_t>(cw.rect.height - title_h)
+                                  : 1;
+    xcb_configure_notify_event_t ev{};
+    ev.response_type = XCB_CONFIGURE_NOTIFY;
+    ev.event = cw.window;
+    ev.window = cw.window;
+    ev.above_sibling = XCB_WINDOW_NONE;
+    ev.x = cw.rect.x;
+    ev.y = static_cast<int16_t>(cw.rect.y + title_h);
+    ev.width = cw.rect.width;
+    ev.height = client_h;
+    ev.border_width = 0;
+    ev.override_redirect = 0;
+    xcb_send_event(conn_, 0, cw.window, XCB_EVENT_MASK_STRUCTURE_NOTIFY,
+                   reinterpret_cast<const char*>(&ev));
+}
+
 void WindowManager::configure_client_rect(xcb_window_t win, const Rect& rect, uint16_t border_w) {
     auto it = clients_.find(win);
     if (it == clients_.end()) return;
@@ -1075,6 +1149,7 @@ void WindowManager::configure_client_rect(xcb_window_t win, const Rect& rect, ui
                                 12, static_cast<int16_t>(-static_cast<int16_t>(border_w)));
         }
         draw_titlebar(cw);
+        send_configure_notify(cw);
     }
 }
 
@@ -1167,14 +1242,6 @@ void WindowManager::manage_client(xcb_window_t win) {
         XCB_EVENT_MASK_PROPERTY_CHANGE | XCB_EVENT_MASK_STRUCTURE_NOTIFY;
     xcb_change_window_attributes(conn_, win, XCB_CW_EVENT_MASK, &client_ev_mask);
 
-    // If client was already viewable during initial scan, ignore reparent's UnmapNotify
-    auto attr_cookie = xcb_get_window_attributes(conn_, win);
-    UniqueMalloc<xcb_get_window_attributes_reply_t> attr(
-        xcb_get_window_attributes_reply(conn_, attr_cookie, nullptr));
-    if (attr && attr->map_state == XCB_MAP_STATE_VIEWABLE) {
-        ignore_unmap_[win] += 2;
-    }
-
     xcb_reparent_window(conn_, win, frame, 0, static_cast<int16_t>(title_h));
 
     ClientWindow cw;
@@ -1196,26 +1263,28 @@ void WindowManager::manage_client(xcb_window_t win) {
     xcb_map_window(conn_, win);
     xcb_map_window(conn_, frame);
 
-    if (wm_state_atom_ != XCB_ATOM_NONE) {
-        const uint32_t wm_state_data[2] = {1 /*NormalState*/, XCB_WINDOW_NONE};
-        xcb_change_property(conn_, XCB_PROP_MODE_REPLACE, win, wm_state_atom_,
-                            wm_state_atom_, 32, 2, wm_state_data);
-    }
+    set_icccm_wm_state(win, 1 /*NormalState*/);
 
     if (ewmh_initialized_) {
+        xcb_ewmh_set_wm_desktop(&ewmh_, win, cw.desktop);
         xcb_ewmh_get_atoms_reply_t states{};
         auto st_cookie = xcb_ewmh_get_wm_state(&ewmh_, win);
         if (xcb_ewmh_get_wm_state_reply(&ewmh_, st_cookie, &states, nullptr)) {
             bool want_fs = false;
+            bool want_max = false;
             for (uint32_t i = 0; i < states.atoms_len; ++i) {
                 if (states.atoms[i] == ewmh_._NET_WM_STATE_FULLSCREEN) {
                     want_fs = true;
-                    break;
+                } else if (states.atoms[i] == ewmh_._NET_WM_STATE_MAXIMIZED_HORZ ||
+                           states.atoms[i] == ewmh_._NET_WM_STATE_MAXIMIZED_VERT) {
+                    want_max = true;
                 }
             }
             xcb_ewmh_get_atoms_reply_wipe(&states);
             if (want_fs) {
                 set_fullscreen(win, true);
+            } else if (want_max) {
+                set_maximized(win, true);
             }
         }
     }
@@ -1244,11 +1313,11 @@ void WindowManager::unmanage_window(xcb_window_t win, bool destroyed) {
         frame_to_client_.erase(frame);
         if (!destroyed) {
             xcb_grab_server(conn_);
-            if (wm_state_atom_ != XCB_ATOM_NONE) {
-                const uint32_t wm_state_data[2] = {0 /*WithdrawnState*/, XCB_WINDOW_NONE};
-                xcb_change_property(conn_, XCB_PROP_MODE_REPLACE, win, wm_state_atom_,
-                                    wm_state_atom_, 32, 2, wm_state_data);
-            }
+            const uint32_t zero_mask = 0;
+            xcb_change_window_attributes(conn_, win, XCB_CW_EVENT_MASK, &zero_mask);
+            xcb_ungrab_button(conn_, XCB_BUTTON_INDEX_ANY, win, XCB_MOD_MASK_ANY);
+            xcb_unmap_window(conn_, win);
+            set_icccm_wm_state(win, 0 /*WithdrawnState*/);
             xcb_reparent_window(conn_, win, screen_->root, rect.x, rect.y);
             xcb_change_save_set(conn_, XCB_SET_MODE_DELETE, win);
             xcb_destroy_window(conn_, frame);
@@ -1367,6 +1436,11 @@ void WindowManager::on_destroy_notify(const xcb_destroy_notify_event_t* ev) {
 void WindowManager::on_unmap_notify(const xcb_unmap_notify_event_t* ev) {
     if (ev->from_configure) return;
     if (frame_to_client_.contains(ev->window)) return;
+    auto it = clients_.find(ev->window);
+    if (it == clients_.end()) return;
+    const bool is_synthetic = (ev->response_type & 0x80) != 0;
+    if (!is_synthetic && ev->event != it->second.frame) return;
+
     auto ig_it = ignore_unmap_.find(ev->window);
     if (ig_it != ignore_unmap_.end() && ig_it->second > 0) {
         --ig_it->second;
@@ -1829,6 +1903,10 @@ void WindowManager::on_client_message(const xcb_client_message_event_t* ev) {
         }
     } else if (ev->type == ewmh_._NET_CURRENT_DESKTOP) {
         switch_desktop(ev->data.data32[0]);
+    } else if (ev->type == wm_change_state_atom_ && clients_.contains(ev->window)) {
+        if (ev->data.data32[0] == 3 /*IconicState*/) {
+            minimize_window(ev->window);
+        }
     } else if (ev->type == lunar_wm_action_atom_) {
         if (ev->data.data32[0] == ipc::kWmExit) {
             std::cout << "lunar-wm: exit requested via panel action\n";
@@ -2206,6 +2284,7 @@ void WindowManager::minimize_window(xcb_window_t win) {
     cw.minimized = true;
     cw.mapped = false;
     xcb_unmap_window(conn_, cw.frame);
+    set_icccm_wm_state(win, 3 /*IconicState*/);
     update_wm_state_property(win, cw);
 
     if (focused_window_ == win) {
@@ -2242,7 +2321,9 @@ void WindowManager::restore_window(xcb_window_t win) {
     if (cw.minimized || !cw.mapped) {
         cw.minimized = false;
         cw.mapped = true;
+        xcb_map_window(conn_, win);
         xcb_map_window(conn_, cw.frame);
+        set_icccm_wm_state(win, 1 /*NormalState*/);
         update_wm_state_property(win, cw);
     }
     focus_window(win);
@@ -2257,6 +2338,9 @@ void WindowManager::move_client_to_desktop(xcb_window_t win, uint32_t target) {
     auto it = clients_.find(win);
     if (it == clients_.end()) return;
     it->second.desktop = target;
+    if (ewmh_initialized_) {
+        xcb_ewmh_set_wm_desktop(&ewmh_, win, target);
+    }
     switch_desktop(target);
     focus_window(win);
     raise_docks();
@@ -2295,6 +2379,18 @@ void WindowManager::focus_window(xcb_window_t win) {
     xcb_change_window_attributes(conn_, it->second.frame, XCB_CW_BORDER_PIXEL, &focused_px);
     draw_titlebar(it->second);
     xcb_set_input_focus(conn_, XCB_INPUT_FOCUS_POINTER_ROOT, win, XCB_CURRENT_TIME);
+
+    if (client_supports_protocol(conn_, win, wm_protocols_atom_, wm_take_focus_atom_)) {
+        xcb_client_message_event_t msg{};
+        msg.response_type = XCB_CLIENT_MESSAGE;
+        msg.format = 32;
+        msg.window = win;
+        msg.type = wm_protocols_atom_;
+        msg.data.data32[0] = wm_take_focus_atom_;
+        msg.data.data32[1] = XCB_CURRENT_TIME;
+        xcb_send_event(conn_, 0, win, XCB_EVENT_MASK_NO_EVENT,
+                       reinterpret_cast<const char*>(&msg));
+    }
 
     if (ewmh_initialized_) {
         xcb_ewmh_set_active_window(&ewmh_, screen_idx_, win);
@@ -2368,33 +2464,18 @@ void WindowManager::cycle_focus() {
 }
 
 void WindowManager::close_window(xcb_window_t win) {
-    if (wm_protocols_atom_ != XCB_ATOM_NONE && wm_delete_window_atom_ != XCB_ATOM_NONE) {
-        xcb_icccm_get_wm_protocols_reply_t protocols{};
-        auto cookie = xcb_icccm_get_wm_protocols(conn_, win, wm_protocols_atom_);
-        if (xcb_icccm_get_wm_protocols_reply(conn_, cookie, &protocols, nullptr)) {
-            bool supports_delete = false;
-            for (uint32_t i = 0; i < protocols.atoms_len; ++i) {
-                if (protocols.atoms[i] == wm_delete_window_atom_) {
-                    supports_delete = true;
-                    break;
-                }
-            }
-            xcb_icccm_get_wm_protocols_reply_wipe(&protocols);
-
-            if (supports_delete) {
-                xcb_client_message_event_t msg{};
-                msg.response_type = XCB_CLIENT_MESSAGE;
-                msg.format = 32;
-                msg.window = win;
-                msg.type = wm_protocols_atom_;
-                msg.data.data32[0] = wm_delete_window_atom_;
-                msg.data.data32[1] = XCB_CURRENT_TIME;
-                xcb_send_event(conn_, 0, win, XCB_EVENT_MASK_NO_EVENT,
-                               reinterpret_cast<const char*>(&msg));
-                xcb_flush(conn_);
-                return;
-            }
-        }
+    if (client_supports_protocol(conn_, win, wm_protocols_atom_, wm_delete_window_atom_)) {
+        xcb_client_message_event_t msg{};
+        msg.response_type = XCB_CLIENT_MESSAGE;
+        msg.format = 32;
+        msg.window = win;
+        msg.type = wm_protocols_atom_;
+        msg.data.data32[0] = wm_delete_window_atom_;
+        msg.data.data32[1] = XCB_CURRENT_TIME;
+        xcb_send_event(conn_, 0, win, XCB_EVENT_MASK_NO_EVENT,
+                       reinterpret_cast<const char*>(&msg));
+        xcb_flush(conn_);
+        return;
     }
 
     xcb_kill_client(conn_, win);
@@ -2479,6 +2560,11 @@ void WindowManager::ensure_panel_alive() {
             dup2(log_fd, STDOUT_FILENO);
             dup2(log_fd, STDERR_FILENO);
             if (log_fd > STDERR_FILENO) close(log_fd);
+        }
+        if (const char* home = std::getenv("HOME"); home && *home) {
+            if (chdir(home) != 0) {
+                // ignore if directory missing
+            }
         }
         const char* argv[] = {panel_bin.c_str(), nullptr};
         execvp(argv[0], const_cast<char* const*>(argv));

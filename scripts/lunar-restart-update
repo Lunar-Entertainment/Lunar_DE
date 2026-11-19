@@ -31,11 +31,70 @@ if [[ -z "${BIN_DIR}" ]]; then
     BIN_DIR="${SCRIPT_DIR}"
 fi
 
+cd "${HOME:-/}"
+
 # Run APT update + upgrade in real sessions when configured and polkit-enabled
 if [[ "${LUNAR_XEPHYR:-0}" != "1" ]] && [[ -f /etc/apt/sources.list.d/lunar-de.list ]] && \
    command -v systemctl >/dev/null 2>&1 && systemctl cat lunar-de-autoupdate.service >/dev/null 2>&1; then
     echo "Running lunar-de-autoupdate.service..."
     systemctl start lunar-de-autoupdate.service || true
+fi
+
+# Refresh portal config and clean X11 session environment on live restarts
+unset WAYLAND_DISPLAY GIO_USE_VFS SESSION_MANAGER GNOME_DESKTOP_SESSION_ID GNOME_SHELL_SESSION_MODE GTK_MODULES GTK3_MODULES QT_ACCESSIBILITY
+export DESKTOP_SESSION=lunar
+export XDG_SESSION_DESKTOP=lunar
+export XDG_SESSION_TYPE=x11
+export XDG_CURRENT_DESKTOP=Lunar
+export GDK_BACKEND=x11
+export QT_QPA_PLATFORM=xcb
+export SDL_VIDEODRIVER=x11
+export CLUTTER_BACKEND=x11
+export ELECTRON_OZONE_PLATFORM_HINT=x11
+export GTK_USE_PORTAL=0
+export NO_AT_BRIDGE=1
+export GTK_A11Y=none
+
+if [[ "${LUNAR_XEPHYR:-0}" != "1" ]]; then
+    PORTAL_USER_DIR="${XDG_CONFIG_HOME:-${HOME}/.config}/xdg-desktop-portal"
+    mkdir -p "${PORTAL_USER_DIR}"
+    cat > "${PORTAL_USER_DIR}/lunar-portals.conf" <<'EOF'
+[preferred]
+default=gtk;
+org.freedesktop.impl.portal.Secret=gnome-keyring;
+org.freedesktop.impl.portal.Background=none;
+org.freedesktop.impl.portal.Clipboard=none;
+org.freedesktop.impl.portal.GlobalShortcuts=none;
+org.freedesktop.impl.portal.InputCapture=none;
+org.freedesktop.impl.portal.RemoteDesktop=none;
+org.freedesktop.impl.portal.ScreenCast=none;
+org.freedesktop.impl.portal.Screenshot=none;
+org.freedesktop.impl.portal.Usb=none;
+org.freedesktop.impl.portal.Wallpaper=none;
+EOF
+
+    if command -v systemctl >/dev/null 2>&1; then
+        systemctl --user unset-environment \
+            WAYLAND_DISPLAY GIO_USE_VFS SESSION_MANAGER GNOME_DESKTOP_SESSION_ID \
+            GNOME_SHELL_SESSION_MODE GTK_MODULES GTK3_MODULES QT_ACCESSIBILITY \
+            2>/dev/null || true
+    fi
+
+    if command -v dbus-update-activation-environment >/dev/null 2>&1; then
+        dbus-update-activation-environment --systemd \
+            DISPLAY XAUTHORITY LANG LC_ALL DESKTOP_SESSION XDG_SESSION_DESKTOP \
+            XDG_SESSION_TYPE XDG_CURRENT_DESKTOP GDK_BACKEND QT_QPA_PLATFORM \
+            SDL_VIDEODRIVER CLUTTER_BACKEND ELECTRON_OZONE_PLATFORM_HINT \
+            GTK_USE_PORTAL NO_AT_BRIDGE GTK_A11Y \
+            2>/dev/null || true
+    fi
+
+    if command -v systemctl >/dev/null 2>&1; then
+        if ! systemctl --user is-active --quiet xdg-desktop-portal.service; then
+            systemctl --user reset-failed xdg-desktop-portal.service 2>/dev/null || true
+            systemctl --user restart xdg-desktop-portal.service 2>/dev/null &
+        fi
+    fi
 fi
 
 DISP_NUM="${DISPLAY:-:0}"
