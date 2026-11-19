@@ -1,5 +1,6 @@
 #pragma once
 
+#include <csignal>
 #include <cstdint>
 #include <string>
 #include <unordered_map>
@@ -58,7 +59,9 @@ public:
 
     bool init(const char* display_name = nullptr);
     int run();
-    void request_quit() noexcept { running_ = false; }
+    void request_quit() noexcept { running_ = 0; }
+    void request_restart() noexcept { restart_requested_ = 1; running_ = 0; }
+    bool restart_requested() const noexcept { return restart_requested_ != 0; }
 
 private:
     enum class DragMode { None, Move, Resize };
@@ -200,7 +203,8 @@ private:
     bool super_tap_pending_ = false;
     xcb_keycode_t super_keycode_ = 0;
 
-    bool running_ = false;
+    volatile sig_atomic_t running_ = 0;
+    volatile sig_atomic_t restart_requested_ = 0;
 };
 
 } // namespace lunar

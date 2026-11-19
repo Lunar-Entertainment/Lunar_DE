@@ -4,8 +4,10 @@
 #include <cstdint>
 #include <cstdlib>
 #include <dlfcn.h>
+#include <limits.h>
 #include <memory>
 #include <string>
+#include <unistd.h>
 #include <vector>
 
 #include <xcb/randr.h>
@@ -60,12 +62,31 @@ inline constexpr uint32_t kPanelOpenWallpaperPicker    = 5;
 inline constexpr uint32_t kPanelReloadWallpaper        = 6;
 inline constexpr uint32_t kPanelToggleGeminiLive       = 7;
 inline constexpr uint32_t kPanelOpenAppearance         = 8;
+inline constexpr uint32_t kPanelToggleRunDialog        = 9;
 
 inline constexpr uint32_t kWmExit                      = 1;
 inline constexpr uint32_t kWmReloadWallpaper           = 2;
 inline constexpr uint32_t kWmToggleMinimize            = 3;
 inline constexpr uint32_t kWmReloadDesktopIcons        = 4;
+inline constexpr uint32_t kWmRestart                   = 5;
 } // namespace ipc
+
+inline std::string resolve_self_exe_path(const char* fallback) {
+    char buf[PATH_MAX]{};
+    const ssize_t n = readlink("/proc/self/exe", buf, sizeof(buf) - 1);
+    if (n > 0) {
+        buf[n] = '\0';
+        std::string path(buf);
+        const std::string deleted_suffix = " (deleted)";
+        if (path.size() > deleted_suffix.size() &&
+            path.compare(path.size() - deleted_suffix.size(),
+                         deleted_suffix.size(), deleted_suffix) == 0) {
+            path.erase(path.size() - deleted_suffix.size());
+        }
+        return path;
+    }
+    return fallback ? std::string(fallback) : std::string{};
+}
 
 inline void prepare_x11_app_env() {
     unsetenv("WAYLAND_DISPLAY");

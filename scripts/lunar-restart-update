@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+LOG_FILE="/tmp/lunar-restart-update.log"
+exec >>"${LOG_FILE}" 2>&1
+echo "[$(date '+%F %T')] Starting Lunar DE restart/update"
+
+OLD_PANEL_PID=""
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --panel-pid)
+            OLD_PANEL_PID="${2:-}"
+            shift 2
+            ;;
+        *)
+            shift
+            ;;
+    esac
+done
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BIN_DIR=""
+if [[ -n "${OLD_PANEL_PID}" && -r "/proc/${OLD_PANEL_PID}/exe" ]]; then
+    PANEL_EXE="$(readlink -f "/proc/${OLD_PANEL_PID}/exe" 2>/dev/null || true)"
+    PANEL_EXE="${PANEL_EXE% (deleted)}"
+    if [[ -n "${PANEL_EXE}" ]]; then
+        BIN_DIR="$(dirname "${PANEL_EXE}")"
+    fi
+fi
+if [[ -z "${BIN_DIR}" ]]; then
+    BIN_DIR="${SCRIPT_DIR}"
+fi
+
+# Run APT update + upgrade in real sessions when configured and polkit-enabled
+if [[ "${LUNAR_XEPHYR:-0}" != "1" ]] && [[ -f /etc/apt/sources.list.d/lunar-de.list ]] && \
+   command -v systemctl >/dev/null 2>&1 && systemctl cat lunar-de-autoupdate.service >/dev/null 2>&1; then
+    echo "Running lunar-de-autoupdate.service..."
+    systemctl start lunar-de-autoupdate.service || true
+fi
+
+DISP_NUM="${DISPLAY:-:0}"
+DISP_NUM="${DISP_NUM##*:}"
+DISP_NUM="${DISP_NUM%%.*}"
+DISP_NUM="${DISP_NUM:-0}"
+WM_PID_FILE="/tmp/lunar-wm-${DISP_NUM}.pid"
+
+WM_PID=""
+if [[ -r "${WM_PID_FILE}" ]]; then
+    WM_PID="$(tr -cd '0-9' < "${WM_PID_FILE}" || true)"
+fi
+
+if [[ -n "${WM_PID}" ]] && kill -0 "${WM_PID}" 2>/dev/null; then
+    echo "Sending SIGUSR1 to lunar-wm PID ${WM_PID}"
+    kill -USR1 "${WM_PID}" || true
+elif [[ "${LUNAR_XEPHYR:-0}" != "1" ]]; then
+    echo "Fallback: pkill -USR1 -x lunar-wm"
+    pkill -USR1 -x lunar-wm || true
+fi
+
+if [[ -n "${OLD_PANEL_PID}" ]] && kill -0 "${OLD_PANEL_PID}" 2>/dev/null; then
+    echo "Stopping old lunar-panel PID ${OLD_PANEL_PID}"
+    kill -TERM "${OLD_PANEL_PID}" 2>/dev/null || true
+    for _ in 1 2 3 4 5 6 7 8 9 10; do
+        kill -0 "${OLD_PANEL_PID}" 2>/dev/null || break
+        sleep 0.1
+    done
+fi
+
+sleep 0.35
+
+NEW_PANEL="${BIN_DIR}/lunar-panel"
+if [[ ! -x "${NEW_PANEL}" ]]; then
+    NEW_PANEL="$(command -v lunar-panel || echo /usr/bin/lunar-panel)"
+fi
+
+echo "Launching new lunar-panel: ${NEW_PANEL}"
+"${NEW_PANEL}" </dev/null >/tmp/lunar-panel.log 2>&1 &
+NEW_PANEL_PID=$!
+
+if [[ "${LUNAR_XEPHYR:-0}" != "1" ]]; then
+    echo "${NEW_PANEL_PID}" >> /tmp/lunar-de-pids.txt
+fi
+
+echo "Restart complete (new lunar-panel PID ${NEW_PANEL_PID})"

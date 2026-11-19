@@ -4,6 +4,7 @@
 #include <X11/keysym.h>
 #include <algorithm>
 #include <array>
+#include <cctype>
 #include <cerrno>
 #include <cstring>
 #include <fstream>
@@ -62,6 +63,10 @@ WindowManager::~WindowManager() {
         }
         if (keysyms_) {
             xcb_key_symbols_free(keysyms_);
+        }
+        if (screen_) {
+            const uint32_t zero_mask = 0;
+            xcb_change_window_attributes(conn_, screen_->root, XCB_CW_EVENT_MASK, &zero_mask);
         }
         xcb_flush(conn_);
         xcb_disconnect(conn_);
@@ -123,6 +128,28 @@ bool WindowManager::init(const char* display_name) {
     recompute_workarea();
     scan_existing_windows();
     xcb_flush(conn_);
+
+    {
+        std::string disp = "0";
+        if (const char* disp_env = std::getenv("DISPLAY"); disp_env && *disp_env) {
+            std::string raw(disp_env);
+            const size_t colon = raw.find(':');
+            if (colon != std::string::npos) raw = raw.substr(colon + 1);
+            const size_t dot = raw.find('.');
+            if (dot != std::string::npos) raw.erase(dot);
+            std::string clean;
+            for (unsigned char c : raw) {
+                if (std::isalnum(c) || c == '-' || c == '_') {
+                    clean.push_back(static_cast<char>(c));
+                }
+            }
+            if (!clean.empty()) disp = clean;
+        }
+        std::ofstream pid_out("/tmp/lunar-wm-" + disp + ".pid");
+        if (pid_out) {
+            pid_out << getpid() << '\n';
+        }
+    }
 
     std::cout << "lunar-wm: initialized on screen " << screen_width_ << "x" << screen_height_
               << " (workarea " << workarea_.x << "," << workarea_.y << " "
@@ -477,8 +504,9 @@ void WindowManager::grab_keys() {
         }
     }
 
-    // Standard Alt+Tab (window cycle) and Alt+F4 (close window)
-    for (uint32_t ks : {static_cast<uint32_t>(XK_Tab), static_cast<uint32_t>(XK_F4)}) {
+    // Standard Alt+Tab (window cycle), Alt+F4 (close window), and Alt+F2 (run menu)
+    for (uint32_t ks : {static_cast<uint32_t>(XK_Tab), static_cast<uint32_t>(XK_F4),
+                        static_cast<uint32_t>(XK_F2)}) {
         UniqueMalloc<xcb_keycode_t> codes(xcb_key_symbols_get_keycode(keysyms_, ks));
         if (!codes) continue;
         for (xcb_keycode_t* kc = codes.get(); *kc != XCB_NO_SYMBOL; ++kc) {
@@ -560,7 +588,8 @@ void WindowManager::scan_existing_windows() {
 }
 
 int WindowManager::run() {
-    running_ = true;
+    running_ = 1;
+    restart_requested_ = 0;
     const int xfd = xcb_get_file_descriptor(conn_);
 
     while (running_) {
@@ -596,7 +625,9 @@ int WindowManager::run() {
             break;
         }
     }
-    terminate_session();
+    if (!restart_requested_) {
+        terminate_session();
+    }
     return 0;
 }
 
@@ -1620,6 +1651,10 @@ void WindowManager::on_key_press(const xcb_key_press_event_t* ev) {
             cycle_focus();
         } else if (ks == XK_F4 && focused_window_ != XCB_WINDOW_NONE) {
             close_window(focused_window_);
+        } else if (ks == XK_F2) {
+            xcb_ungrab_keyboard(conn_, XCB_CURRENT_TIME);
+            xcb_flush(conn_);
+            send_panel_action(ipc::kPanelToggleRunDialog);
         }
         return;
     }
@@ -1655,6 +1690,8 @@ void WindowManager::on_key_press(const xcb_key_press_event_t* ev) {
         break;
     case XK_g:
     case XK_G:
+        xcb_ungrab_keyboard(conn_, XCB_CURRENT_TIME);
+        xcb_flush(conn_);
         send_panel_action(ipc::kPanelToggleGeminiLive);
         break;
     case XK_Left:
@@ -1755,7 +1792,10 @@ void WindowManager::on_client_message(const xcb_client_message_event_t* ev) {
     } else if (ev->type == lunar_wm_action_atom_) {
         if (ev->data.data32[0] == ipc::kWmExit) {
             std::cout << "lunar-wm: exit requested via panel action\n";
-            running_ = false;
+            running_ = 0;
+        } else if (ev->data.data32[0] == ipc::kWmRestart) {
+            std::cout << "lunar-wm: restart requested via panel action\n";
+            request_restart();
         } else if (ev->data.data32[0] == ipc::kWmReloadWallpaper) {
             apply_wallpaper(true);
         } else if (ev->data.data32[0] == ipc::kWmReloadDesktopIcons) {

@@ -29,7 +29,7 @@ public:
     void request_quit() noexcept { running_ = false; }
 
 private:
-    enum class PopupKind { None, AppMenu, QuickSettings, ContextMenu, WallpaperPicker, GeminiLive, Appearance };
+    enum class PopupKind { None, AppMenu, QuickSettings, ContextMenu, WallpaperPicker, GeminiLive, Appearance, RunDialog };
     enum class BarLayout { TopBar, Taskbar };
 
     struct LiveStatus {
@@ -81,6 +81,7 @@ private:
 
     void open_popup(PopupKind kind, int16_t anchor_x = 0, int16_t anchor_y = 0);
     void close_popup();
+    bool acquire_popup_keyboard_grab();
     void redraw_popup();
     void draw_app_menu();
     void draw_quick_settings();
@@ -88,6 +89,7 @@ private:
     void draw_wallpaper_picker();
     void draw_gemini_live();
     void draw_appearance();
+    void draw_run_dialog();
 
     void handle_popup_button_press(const xcb_button_press_event_t* ev);
     void handle_app_menu_click(int16_t x, int16_t y, uint8_t button);
@@ -96,6 +98,10 @@ private:
     void handle_wallpaper_picker_click(int16_t x, int16_t y, uint8_t button);
     void handle_gemini_live_click(int16_t x, int16_t y, uint8_t button);
     void handle_appearance_click(int16_t x, int16_t y, uint8_t button);
+    void handle_run_dialog_click(int16_t x, int16_t y, uint8_t button);
+    void execute_run_command(const std::string& raw);
+    void power_off_system();
+    void restart_and_update_lunar();
     void load_bar_layout();
     void set_bar_layout(BarLayout layout);
     bool refresh_live_status();
@@ -150,6 +156,7 @@ private:
     int16_t popup_hover_x_ = -1;
     int16_t popup_hover_y_ = -1;
     bool dragging_volume_ = false;
+    bool popup_kb_grabbed_ = false;
     bool super_tap_pending_ = false;
     xcb_keycode_t super_keycode_ = 0;
 
@@ -186,6 +193,7 @@ private:
     LiveStatus live_status_;
     std::string api_key_input_;
     bool editing_api_key_ = false;
+    std::string run_query_;
 
     ImageBuffer bg_strip_;
     ImageBuffer canvas_;

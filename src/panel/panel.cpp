@@ -88,6 +88,34 @@ constexpr std::array<const char*, 8> kCategories = {
     "All", "Internet", "Office", "Graphics", "Dev", "Media", "System", "Utilities"
 };
 
+struct RunShortcut {
+    const char* key;
+    const char* label;
+};
+
+constexpr std::array<RunShortcut, 4> kRunShortcuts = {{
+    {"c", "Open Terminal (cmd)"},
+    {"r", "Restart & Update Lunar DE"},
+    {"l", "Log Out"},
+    {"p", "Power Off"},
+}};
+constexpr uint16_t kRunDialogW = 440;
+constexpr uint16_t kRunDialogH = 236;
+constexpr int kRunListY = 98;
+constexpr int kRunRowH = 28;
+
+std::string trim_copy(const std::string& s) {
+    size_t start = 0;
+    while (start < s.size() && std::isspace(static_cast<unsigned char>(s[start]))) {
+        ++start;
+    }
+    size_t end = s.size();
+    while (end > start && std::isspace(static_cast<unsigned char>(s[end - 1]))) {
+        --end;
+    }
+    return s.substr(start, end - start);
+}
+
 std::string to_lower_copy(std::string s) {
     for (char& c : s) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
     return s;
@@ -378,6 +406,10 @@ int Panel::run() {
             }
         }
 
+        if (popup_kind_ != PopupKind::None && !popup_kb_grabbed_) {
+            popup_kb_grabbed_ = acquire_popup_keyboard_grab();
+        }
+
         if (need_panel_redraw || need_popup_redraw) {
             if (need_panel_redraw) redraw();
             if (need_popup_redraw && popup_kind_ != PopupKind::None) {
@@ -395,7 +427,8 @@ int Panel::run() {
         struct pollfd pfd{};
         pfd.fd = xfd;
         pfd.events = POLLIN;
-        int ret = poll(&pfd, 1, 250);
+        const int poll_ms = (popup_kind_ != PopupKind::None && !popup_kb_grabbed_) ? 15 : 250;
+        int ret = poll(&pfd, 1, poll_ms);
         if (ret < 0 && errno != EINTR) {
             break;
         }
@@ -651,6 +684,28 @@ void Panel::on_key_press(const xcb_key_press_event_t* ev) {
         return;
     }
 
+    if (popup_kind_ == PopupKind::RunDialog) {
+        if ((ev->state & XCB_MOD_MASK_1) && ks == XK_F2) {
+            close_popup();
+            return;
+        }
+        if ((ev->state & XCB_MOD_MASK_CONTROL) && (ks == XK_u || ks == XK_U)) {
+            run_query_.clear();
+            return;
+        }
+        if (ks == XK_BackSpace) {
+            if (!run_query_.empty()) run_query_.pop_back();
+        } else if (ks == XK_Return || ks == XK_KP_Enter) {
+            execute_run_command(run_query_);
+        } else if (!(ev->state & (XCB_MOD_MASK_1 | XCB_MOD_MASK_CONTROL)) &&
+                   ks >= 0x20 && ks <= 0x7E) {
+            if (run_query_.size() < 120) {
+                run_query_.push_back(static_cast<char>(ks));
+            }
+        }
+        return;
+    }
+
     if (popup_kind_ != PopupKind::AppMenu) return;
 
     if (ks == XK_BackSpace) {
@@ -747,6 +802,11 @@ void Panel::on_client_message(const xcb_client_message_event_t* ev) {
                        ? PopupKind::None
                        : PopupKind::Appearance);
         break;
+    case ipc::kPanelToggleRunDialog:
+        open_popup(popup_kind_ == PopupKind::RunDialog
+                       ? PopupKind::None
+                       : PopupKind::RunDialog);
+        break;
     default:
         break;
     }
@@ -824,6 +884,14 @@ void Panel::open_popup(PopupKind kind, int16_t anchor_x, int16_t anchor_y) {
         py = is_bottom
                  ? static_cast<int16_t>(panel_y_ - popup_h_ - 8)
                  : static_cast<int16_t>(panel_y_ + height_ + 10);
+    } else if (kind == PopupKind::RunDialog) {
+        popup_w_ = kRunDialogW;
+        popup_h_ = kRunDialogH;
+        px = static_cast<int16_t>(panel_x_ + std::max<int>(10, (static_cast<int>(width_) - popup_w_) / 2));
+        py = static_cast<int16_t>(primary_mon_rect_.y +
+                                  std::max<int>(is_bottom ? 60 : height_ + 40,
+                                                static_cast<int>(screen_height_) / 3 - popup_h_ / 2));
+        run_query_.clear();
     }
 
     if (popup_backbuf_ != XCB_PIXMAP_NONE) {
@@ -857,15 +925,26 @@ void Panel::open_popup(PopupKind kind, int16_t anchor_x, int16_t anchor_y) {
                          XCB_EVENT_MASK_POINTER_MOTION,
                      XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC,
                      XCB_WINDOW_NONE, XCB_CURSOR_NONE, XCB_CURRENT_TIME);
-    xcb_grab_keyboard(conn_, 0, popup_win_, XCB_CURRENT_TIME,
-                      XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC);
+    popup_kb_grabbed_ = acquire_popup_keyboard_grab();
     xcb_flush(conn_);
+}
+
+bool Panel::acquire_popup_keyboard_grab() {
+    if (!conn_ || popup_win_ == XCB_WINDOW_NONE || popup_kind_ == PopupKind::None) {
+        return false;
+    }
+    auto cookie = xcb_grab_keyboard(conn_, 0, popup_win_, XCB_CURRENT_TIME,
+                                    XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC);
+    UniqueMalloc<xcb_grab_keyboard_reply_t> reply(
+        xcb_grab_keyboard_reply(conn_, cookie, nullptr));
+    return reply && reply->status == XCB_GRAB_STATUS_SUCCESS;
 }
 
 void Panel::close_popup() {
     if (popup_kind_ == PopupKind::None) return;
     popup_kind_ = PopupKind::None;
     dragging_volume_ = false;
+    popup_kb_grabbed_ = false;
     if (conn_ && popup_win_ != XCB_WINDOW_NONE) {
         xcb_ungrab_pointer(conn_, XCB_CURRENT_TIME);
         xcb_ungrab_keyboard(conn_, XCB_CURRENT_TIME);
@@ -917,6 +996,8 @@ void Panel::handle_popup_button_press(const xcb_button_press_event_t* ev) {
         handle_gemini_live_click(ev->event_x, ev->event_y, ev->detail);
     } else if (popup_kind_ == PopupKind::Appearance) {
         handle_appearance_click(ev->event_x, ev->event_y, ev->detail);
+    } else if (popup_kind_ == PopupKind::RunDialog) {
+        handle_run_dialog_click(ev->event_x, ev->event_y, ev->detail);
     }
 }
 
@@ -1006,10 +1087,10 @@ void Panel::handle_quick_settings_click(int16_t x, int16_t y, uint8_t button) {
         return;
     }
 
-    // Top-right power/exit circle button in QuickSettings header
+    // Top-right power circle button in QuickSettings header (powers off system; Exit tile logs out)
     if (y >= 12 && y <= 44 && x >= popup_w_ - 46 && x <= popup_w_ - 14) {
         close_popup();
-        send_wm_exit();
+        power_off_system();
         return;
     }
 
@@ -1192,6 +1273,8 @@ void Panel::redraw_popup() {
         draw_gemini_live();
     } else if (popup_kind_ == PopupKind::Appearance) {
         draw_appearance();
+    } else if (popup_kind_ == PopupKind::RunDialog) {
+        draw_run_dialog();
     }
 
     stroke_rounded_rect_aa(popup_canvas_, 0.5f, 0.5f,
@@ -2607,6 +2690,137 @@ void Panel::draw_appearance() {
 
     fill_rounded_rect_aa(popup_canvas_, 310.0f, 212.0f, 136.0f, 34.0f, 8.0f, 0x262d3b, 1.0f);
     f_bold.draw_text(popup_canvas_, 332, 234, "System Settings", 11, 0xf1f5f9);
+}
+
+void Panel::power_off_system() {
+    spawn_command("systemctl poweroff || loginctl poweroff");
+}
+
+void Panel::restart_and_update_lunar() {
+    std::error_code ec;
+    const std::filesystem::path self_exe(resolve_self_exe_path("/usr/bin/lunar-panel"));
+    const std::filesystem::path exe_dir = self_exe.parent_path();
+    std::string script_path;
+    const std::array<std::filesystem::path, 3> candidates = {
+        exe_dir / "lunar-restart-update",
+        exe_dir / ".." / "scripts" / "lunar-restart-update",
+        std::filesystem::path("/usr/bin/lunar-restart-update"),
+    };
+    for (const auto& cand : candidates) {
+        if (std::filesystem::exists(cand, ec)) {
+            script_path = cand.lexically_normal().string();
+            break;
+        }
+    }
+    if (script_path.empty()) {
+        script_path = "lunar-restart-update";
+    }
+    const std::string cmd = "'" + script_path + "' --panel-pid " + std::to_string(getpid());
+    spawn_command(cmd.c_str());
+}
+
+void Panel::execute_run_command(const std::string& raw) {
+    const std::string trimmed = trim_copy(raw);
+    close_popup();
+    if (trimmed.empty()) return;
+
+    const std::string lower = to_lower_copy(trimmed);
+    if (lower == "c") {
+        spawn_terminal();
+    } else if (lower == "r") {
+        restart_and_update_lunar();
+    } else if (lower == "l") {
+        send_wm_exit();
+    } else if (lower == "p") {
+        power_off_system();
+    } else {
+        spawn_command(trimmed.c_str());
+    }
+}
+
+void Panel::handle_run_dialog_click(int16_t x, int16_t y, uint8_t button) {
+    if (button != XCB_BUTTON_INDEX_1) return;
+
+    if (x >= popup_w_ - 38 && y <= 38) {
+        close_popup();
+        return;
+    }
+
+    const int list_end_y = kRunListY + static_cast<int>(kRunShortcuts.size()) * kRunRowH;
+    if (y >= kRunListY && y < list_end_y && x >= 16 && x <= popup_w_ - 16) {
+        const size_t idx = static_cast<size_t>((y - kRunListY) / kRunRowH);
+        if (idx < kRunShortcuts.size()) {
+            execute_run_command(kRunShortcuts[idx].key);
+        }
+    }
+}
+
+void Panel::draw_run_dialog() {
+    const FontRenderer& f_bold = has_bold_font_ ? font_bold_ : font_regular_;
+    const FontRenderer& f_reg = has_regular_font_ ? font_regular_ : font_bold_;
+
+    f_bold.draw_text(popup_canvas_, 18, 30, "Run a Command", 14, 0xf8fafc);
+
+    // Subtle Alt+F2 badge next to title
+    fill_rounded_rect_aa(popup_canvas_, 136.0f, 15.0f, 52.0f, 18.0f, 5.0f, 0x262d3b, 1.0f);
+    f_reg.draw_text(popup_canvas_, 144, 28, "Alt+F2", 11, 0x94a3b8);
+
+    // Close X button
+    {
+        const float cx = static_cast<float>(popup_w_ - 24);
+        const float cy = 24.0f;
+        const bool close_hov = (popup_hover_x_ >= popup_w_ - 38 && popup_hover_y_ <= 38);
+        fill_circle_aa(popup_canvas_, cx, cy, 11.0f, close_hov ? 0xdc2626 : 0x262d3b, 1.0f);
+        draw_line_aa(popup_canvas_, cx - 4.0f, cy - 4.0f, cx + 4.0f, cy + 4.0f, 1.5f, 0xe2e8f0, 0.95f);
+        draw_line_aa(popup_canvas_, cx + 4.0f, cy - 4.0f, cx - 4.0f, cy + 4.0f, 1.5f, 0xe2e8f0, 0.95f);
+    }
+
+    // Input box
+    const int box_x = 16;
+    const int box_y = 46;
+    const int box_w = popup_w_ - 32;
+    const int box_h = 40;
+    fill_rounded_rect_aa(popup_canvas_, static_cast<float>(box_x), static_cast<float>(box_y),
+                         static_cast<float>(box_w), static_cast<float>(box_h),
+                         8.0f, 0x222834, 1.0f);
+    stroke_rounded_rect_aa(popup_canvas_, static_cast<float>(box_x) + 0.5f,
+                           static_cast<float>(box_y) + 0.5f,
+                           static_cast<float>(box_w - 1), static_cast<float>(box_h - 1),
+                           8.0f, 1.5f, 0x38bdf8, 0.95f);
+
+    f_bold.draw_text(popup_canvas_, box_x + 12, box_y + 25, ">", 13, 0x38bdf8);
+    if (run_query_.empty()) {
+        f_reg.draw_text(popup_canvas_, box_x + 28, box_y + 25,
+                        "Type c, r, l, p or any command...", 13, 0x64748b);
+    } else {
+        const std::string shown = ellipsize(f_reg, run_query_ + "|", 13, box_w - 40);
+        f_reg.draw_text(popup_canvas_, box_x + 28, box_y + 25, shown, 13, 0xf8fafc);
+    }
+
+    // Shortcut rows
+    const std::string lower_q = to_lower_copy(trim_copy(run_query_));
+    for (size_t i = 0; i < kRunShortcuts.size(); ++i) {
+        const int ry = kRunListY + static_cast<int>(i) * kRunRowH;
+        const bool hov = (popup_hover_x_ >= 16 && popup_hover_x_ <= popup_w_ - 16 &&
+                          popup_hover_y_ >= ry && popup_hover_y_ < ry + kRunRowH);
+        const bool match = (lower_q == kRunShortcuts[i].key);
+        if (hov || match) {
+            fill_rounded_rect_aa(popup_canvas_, 16.0f, static_cast<float>(ry + 1),
+                                 static_cast<float>(popup_w_ - 32),
+                                 static_cast<float>(kRunRowH - 2),
+                                 6.0f, match ? 0x1e3a5f : 0x252d3d, 1.0f);
+        }
+        fill_rounded_rect_aa(popup_canvas_, 22.0f, static_cast<float>(ry + 4),
+                             24.0f, 20.0f, 5.0f,
+                             match ? 0x38bdf8 : 0x262d3b, 1.0f);
+        f_bold.draw_text(popup_canvas_, 30, ry + 18, kRunShortcuts[i].key, 12,
+                         match ? 0x0f172a : 0x38bdf8);
+        f_reg.draw_text(popup_canvas_, 58, ry + 18, kRunShortcuts[i].label, 12,
+                        (hov || match) ? 0xf8fafc : 0xcbd5e1);
+    }
+
+    f_reg.draw_text(popup_canvas_, 18, popup_h_ - 12,
+                    "Enter to run  |  Click a shortcut  |  Esc to close", 11, 0x64748b);
 }
 
 } // namespace lunar
