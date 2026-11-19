@@ -1,0 +1,922 @@
+#!/usr/bin/env python3
+"""Lunar DE Display Settings — configure monitors, resolutions, rates, and arrangement."""
+
+from __future__ import annotations
+
+import copy
+import math
+import os
+import re
+import shlex
+import subprocess
+import sys
+from dataclasses import dataclass, field
+from pathlib import Path
+
+import cairo
+import gi
+
+gi.require_version("Gtk", "3.0")
+gi.require_version("Gdk", "3.0")
+from gi.repository import Gdk, GLib, Gtk  # noqa: E402
+
+
+HEADER_RE = re.compile(
+    r"^(\S+)\s+connected\s+(primary\s+)?(?:(\d+)x(\d+)\+(\d+)\+(\d+)\s+(?:(normal|left|inverted|right)\s+)?)?\("
+)
+DISCONNECTED_RE = re.compile(r"^(\S+)\s+disconnected\b")
+MODE_LINE_RE = re.compile(r"^\s+(\d+x\d+)\s+(.*)$")
+RATE_TOK_RE = re.compile(r"(\d+(?:\.\d+)?)(\*?\+?|\+?\*?)")
+
+ORIENTATIONS = [
+    ("normal", "Normal (Landscape)"),
+    ("left", "Left (90\u00b0 CCW)"),
+    ("right", "Right (270\u00b0 CW)"),
+    ("inverted", "Inverted (180\u00b0)"),
+]
+
+DARK_CSS = b"""
+window, dialog {
+    background-color: #0f172a;
+    color: #f1f5f9;
+}
+headerbar {
+    background-color: #161a22;
+    border-bottom: 1px solid #2a3242;
+    color: #f8fafc;
+}
+.lunar-card {
+    background-color: #161a22;
+    border: 1px solid #2a3242;
+    border-radius: 10px;
+    padding: 12px;
+}
+.lunar-banner {
+    background-color: #1e3a5f;
+    border: 1px solid #38bdf8;
+    border-radius: 8px;
+    padding: 10px 14px;
+}
+.lunar-subtitle {
+    color: #94a3b8;
+    font-size: 12px;
+}
+.lunar-field-label {
+    color: #cbd5e1;
+    font-weight: 600;
+}
+button {
+    background-image: none;
+    background-color: #212938;
+    color: #f1f5f9;
+    border: 1px solid #334155;
+    border-radius: 7px;
+    padding: 6px 12px;
+}
+button:hover {
+    background-color: #2b3548;
+    border-color: #475569;
+}
+button.suggested-action {
+    background-color: #0284c7;
+    border-color: #38bdf8;
+    color: #ffffff;
+    font-weight: 600;
+}
+button.suggested-action:hover {
+    background-color: #0369a1;
+}
+button.destructive-action {
+    background-color: #b91c1c;
+    border-color: #ef4444;
+    color: #ffffff;
+}
+combobox button, spinbutton, spinbutton entry {
+    background-color: #1e2430;
+    color: #f8fafc;
+    border-color: #334155;
+}
+"""
+
+
+@dataclass
+class MonitorState:
+    name: str
+    primary: bool = False
+    enabled: bool = True
+    x: int = 0
+    y: int = 0
+    rotation: str = "normal"
+    mm_w: int = 0
+    mm_h: int = 0
+    modes: dict[str, list[float]] = field(default_factory=dict)
+    mode: str = "1920x1080"
+    rate: float = 60.0
+    pref_mode: str = ""
+    pref_rate: float = 60.0
+
+    def mode_dims(self) -> tuple[int, int]:
+        try:
+            mw_s, mh_s = self.mode.split("x", 1)
+            mw, mh = int(mw_s), int(mh_s)
+        except ValueError:
+            return 1920, 1080
+        if self.rotation in ("left", "right"):
+            return mh, mw
+        return mw, mh
+
+
+def parse_xrandr(output: str | None = None) -> list[MonitorState]:
+    if output is None:
+        output = subprocess.check_output(["xrandr", "--query"], text=True)
+
+    monitors: list[MonitorState] = []
+    current: MonitorState | None = None
+
+    for line in output.splitlines():
+        hm = HEADER_RE.match(line)
+        if hm:
+            name = hm.group(1)
+            primary = bool(hm.group(2))
+            enabled = hm.group(3) is not None
+            x = int(hm.group(5)) if hm.group(5) is not None else 0
+            y = int(hm.group(6)) if hm.group(6) is not None else 0
+            rotation = hm.group(7) or "normal"
+            mm_match = re.search(r"(\d+)mm\s+x\s+(\d+)mm", line)
+            mm_w = int(mm_match.group(1)) if mm_match else 0
+            mm_h = int(mm_match.group(2)) if mm_match else 0
+
+            current = MonitorState(
+                name=name,
+                primary=primary,
+                enabled=enabled,
+                x=x,
+                y=y,
+                rotation=rotation,
+                mm_w=mm_w,
+                mm_h=mm_h,
+            )
+            monitors.append(current)
+            continue
+
+        if DISCONNECTED_RE.match(line) or (line and not line[0].isspace()):
+            current = None
+            continue
+
+        if current is not None:
+            mm = MODE_LINE_RE.match(line)
+            if mm:
+                res = mm.group(1)
+                rates = current.modes.setdefault(res, [])
+                for r_str, flags in RATE_TOK_RE.findall(mm.group(2)):
+                    rate = float(r_str)
+                    if rate not in rates:
+                        rates.append(rate)
+                    if "*" in flags:
+                        current.mode = res
+                        current.rate = rate
+                    if "+" in flags and not current.pref_mode:
+                        current.pref_mode = res
+                        current.pref_rate = rate
+
+    for m in monitors:
+        if m.modes:
+            if not m.pref_mode or m.pref_mode not in m.modes:
+                m.pref_mode = next(iter(m.modes))
+                m.pref_rate = m.modes[m.pref_mode][0]
+            if m.mode not in m.modes:
+                m.mode = m.pref_mode
+                m.rate = m.pref_rate
+            elif m.rate not in m.modes[m.mode]:
+                m.rate = m.modes[m.mode][0]
+
+    return monitors
+
+
+def normalize_positions(monitors: list[MonitorState]) -> None:
+    enabled = [m for m in monitors if m.enabled]
+    if not enabled:
+        return
+    min_x = min(m.x for m in enabled)
+    min_y = min(m.y for m in enabled)
+    for m in enabled:
+        m.x -= min_x
+        m.y -= min_y
+
+
+def build_xrandr_command(monitors: list[MonitorState]) -> list[str]:
+    work = copy.deepcopy(monitors)
+    normalize_positions(work)
+
+    enabled = [m for m in work if m.enabled]
+    if enabled and not any(m.primary for m in enabled):
+        enabled[0].primary = True
+    prim_name = next((m.name for m in enabled if m.primary), "")
+
+    cmd = ["xrandr"]
+    for m in work:
+        cmd.extend(["--output", m.name])
+        if not m.enabled:
+            cmd.append("--off")
+            continue
+        cmd.extend(["--mode", m.mode])
+        if m.rate > 1.0:
+            cmd.extend(["--rate", f"{m.rate:.2f}"])
+        cmd.extend(["--pos", f"{m.x}x{m.y}", "--rotate", m.rotation])
+        if m.name == prim_name:
+            cmd.append("--primary")
+    return cmd
+
+
+def config_script_path() -> Path:
+    base = Path(os.environ.get("XDG_CONFIG_HOME") or (Path.home() / ".config"))
+    return base / "lunar-de" / "monitor_layout.sh"
+
+
+def save_monitor_layout(cmd: list[str]) -> Path:
+    path = config_script_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("#!/bin/sh\n" + shlex.join(cmd) + "\n", encoding="utf-8")
+    path.chmod(0o755)
+    return path
+
+
+class MonitorCanvas(Gtk.DrawingArea):
+    """Interactive scaled monitor arrangement canvas with drag-and-drop snapping."""
+
+    def __init__(self, app: "DisplaySettingsApp") -> None:
+        super().__init__()
+        self.app = app
+        self.set_size_request(-1, 240)
+        self.add_events(
+            Gdk.EventMask.BUTTON_PRESS_MASK
+            | Gdk.EventMask.BUTTON_RELEASE_MASK
+            | Gdk.EventMask.POINTER_MOTION_MASK
+        )
+        self.connect("draw", self.on_draw)
+        self.connect("button-press-event", self.on_button_press)
+        self.connect("motion-notify-event", self.on_motion)
+        self.connect("button-release-event", self.on_button_release)
+
+        self._scale = 0.1
+        self._off_x = 0.0
+        self._off_y = 0.0
+        self._rects: dict[str, tuple[float, float, float, float]] = {}
+        self._drag_name: str | None = None
+        self._drag_start_px = (0.0, 0.0)
+        self._drag_orig_pos = (0, 0)
+
+    def _layout_boxes(self, alloc_w: int, alloc_h: int) -> list[tuple[MonitorState, int, int, int, int]]:
+        enabled = [m for m in self.app.monitors if m.enabled]
+        disabled = [m for m in self.app.monitors if not m.enabled]
+
+        boxes: list[tuple[MonitorState, int, int, int, int]] = []
+        if enabled:
+            for m in enabled:
+                ew, eh = m.mode_dims()
+                boxes.append((m, m.x, m.y, ew, eh))
+            max_r = max(bx + bw for _, bx, _, bw, _ in boxes)
+            top_y = min(by for _, _, by, _, _ in boxes)
+        else:
+            max_r = 0
+            top_y = 0
+
+        off_cursor = max_r + 220
+        for m in disabled:
+            ew, eh = m.mode_dims()
+            boxes.append((m, off_cursor, top_y, ew, eh))
+            off_cursor += ew + 180
+
+        if not boxes:
+            return []
+
+        min_x = min(bx for _, bx, _, _, _ in boxes)
+        min_y = min(by for _, _, by, _, _ in boxes)
+        max_x = max(bx + bw for _, bx, _, bw, _ in boxes)
+        max_y = max(by + bh for _, _, by, _, bh in boxes)
+
+        span_w = max(1, max_x - min_x)
+        span_h = max(1, max_y - min_y)
+        pad = 28.0
+        usable_w = max(80.0, alloc_w - 2 * pad)
+        usable_h = max(60.0, alloc_h - 2 * pad)
+        self._scale = min(usable_w / span_w, usable_h / span_h) * 0.85
+        draw_w = span_w * self._scale
+        draw_h = span_h * self._scale
+        self._off_x = (alloc_w - draw_w) * 0.5 - min_x * self._scale
+        self._off_y = (alloc_h - draw_h) * 0.5 - min_y * self._scale
+        return boxes
+
+    def _rounded_rect(self, cr: cairo.Context, x: float, y: float, w: float, h: float, r: float) -> None:
+        r = min(r, w * 0.5, h * 0.5)
+        cr.new_sub_path()
+        cr.arc(x + w - r, y + r, r, -math.pi / 2, 0)
+        cr.arc(x + w - r, y + h - r, r, 0, math.pi / 2)
+        cr.arc(x + r, y + h - r, r, math.pi / 2, math.pi)
+        cr.arc(x + r, y + r, r, math.pi, 3 * math.pi / 2)
+        cr.close_path()
+
+    def on_draw(self, _widget: Gtk.Widget, cr: cairo.Context) -> bool:
+        alloc = self.get_allocation()
+        w, h = alloc.width, alloc.height
+
+        # Background
+        cr.set_source_rgb(0.067, 0.094, 0.149)
+        cr.rectangle(0, 0, w, h)
+        cr.fill()
+
+        # Subtle grid dots
+        cr.set_source_rgba(1.0, 1.0, 1.0, 0.06)
+        step = 24
+        for gx in range(step, w, step):
+            for gy in range(step, h, step):
+                cr.arc(gx, gy, 1.0, 0, 2 * math.pi)
+                cr.fill()
+
+        boxes = self._layout_boxes(w, h)
+        self._rects.clear()
+
+        for m, lx, ly, lw, lh in boxes:
+            sx = self._off_x + lx * self._scale
+            sy = self._off_y + ly * self._scale
+            sw = max(56.0, lw * self._scale)
+            sh = max(36.0, lh * self._scale)
+            self._rects[m.name] = (sx, sy, sw, sh)
+
+            selected = (m.name == self.app.selected_name)
+            self._rounded_rect(cr, sx, sy, sw, sh, 8.0)
+            if not m.enabled:
+                cr.set_source_rgba(0.11, 0.14, 0.20, 0.55)
+            elif selected:
+                cr.set_source_rgb(0.118, 0.227, 0.373)
+            else:
+                cr.set_source_rgb(0.129, 0.161, 0.224)
+            cr.fill_preserve()
+
+            cr.set_line_width(2.2 if selected else 1.2)
+            if selected:
+                cr.set_source_rgb(0.220, 0.741, 0.973)
+            elif not m.enabled:
+                cr.set_source_rgba(0.39, 0.45, 0.55, 0.6)
+            else:
+                cr.set_source_rgb(0.278, 0.333, 0.412)
+            cr.stroke()
+
+            # Label: name + PRIMARY/OFF + resolution + coords
+            cr.select_font_face("Sans", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_BOLD)
+            cr.set_font_size(max(10.0, min(14.0, sh * 0.18)))
+            cr.set_source_rgb(0.97, 0.98, 0.99) if m.enabled else cr.set_source_rgb(0.58, 0.64, 0.72)
+            ext = cr.text_extents(m.name)
+            cr.move_to(sx + (sw - ext.width) * 0.5, sy + sh * 0.42)
+            cr.show_text(m.name)
+
+            badge = "OFF" if not m.enabled else ("PRIMARY" if m.primary else f"{lw}x{lh}")
+            sub = f"{lw}x{lh} ({m.x},{m.y})" if m.enabled else "Disabled"
+            if sh > 64:
+                cr.select_font_face("Sans", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
+                cr.set_font_size(max(9.0, min(11.5, sh * 0.13)))
+                if m.primary and m.enabled:
+                    cr.set_source_rgb(0.220, 0.741, 0.973)
+                else:
+                    cr.set_source_rgb(0.64, 0.71, 0.80)
+                sub_line = f"PRIMARY  \u2022  {sub}" if (m.primary and m.enabled) else badge
+                ext2 = cr.text_extents(sub_line)
+                cr.move_to(sx + (sw - ext2.width) * 0.5, sy + sh * 0.66)
+                cr.show_text(sub_line)
+
+        return True
+
+    def on_button_press(self, _widget: Gtk.Widget, ev: Gdk.EventButton) -> bool:
+        if ev.button != 1:
+            return False
+        for name, (sx, sy, sw, sh) in reversed(list(self._rects.items())):
+            if sx <= ev.x <= sx + sw and sy <= ev.y <= sy + sh:
+                self.app.select_monitor(name)
+                mon = self.app.get_selected()
+                if mon and mon.enabled:
+                    self._drag_name = name
+                    self._drag_start_px = (ev.x, ev.y)
+                    self._drag_orig_pos = (mon.x, mon.y)
+                self.queue_draw()
+                return True
+        return False
+
+    def on_motion(self, _widget: Gtk.Widget, ev: Gdk.EventMotion) -> bool:
+        if not self._drag_name or self._scale <= 0:
+            return False
+        mon = self.app.find_monitor(self._drag_name)
+        if not mon:
+            return False
+
+        dx = round((ev.x - self._drag_start_px[0]) / self._scale)
+        dy = round((ev.y - self._drag_start_px[1]) / self._scale)
+        cand_x = self._drag_orig_pos[0] + dx
+        cand_y = self._drag_orig_pos[1] + dy
+
+        # Edge snapping to other enabled monitors
+        mw, mh = mon.mode_dims()
+        snap_thresh = 85
+        for other in self.app.monitors:
+            if other.name == mon.name or not other.enabled:
+                continue
+            ow, oh = other.mode_dims()
+            for tx in (other.x + ow, other.x - mw, other.x, other.x + ow - mw):
+                if abs(cand_x - tx) <= snap_thresh:
+                    cand_x = tx
+                    break
+            for ty in (other.y, other.y + oh, other.y - mh, other.y + oh - mh):
+                if abs(cand_y - ty) <= snap_thresh:
+                    cand_y = ty
+                    break
+
+        mon.x = cand_x
+        mon.y = cand_y
+        self.app.sync_position_fields()
+        self.queue_draw()
+        return True
+
+    def on_button_release(self, _widget: Gtk.Widget, _ev: Gdk.EventButton) -> bool:
+        if not self._drag_name:
+            return False
+        self._drag_name = None
+        normalize_positions(self.app.monitors)
+        self.app.sync_position_fields()
+        self.queue_draw()
+        return True
+
+
+class DisplaySettingsApp(Gtk.Window):
+    def __init__(self) -> None:
+        super().__init__(title="Display Settings")
+        self.set_default_size(680, 560)
+        self.set_position(Gtk.WindowPosition.CENTER)
+
+        provider = Gtk.CssProvider()
+        provider.load_from_data(DARK_CSS)
+        Gtk.StyleContext.add_provider_for_screen(
+            Gdk.Screen.get_default(), provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+        )
+
+        self.monitors: list[MonitorState] = parse_xrandr()
+        self.selected_name: str = ""
+        if self.monitors:
+            prim = next((m for m in self.monitors if m.primary), self.monitors[0])
+            self.selected_name = prim.name
+
+        self._updating_ui = False
+        self._revert_cmd: list[str] | None = None
+        self._revert_timer_id: int = 0
+        self._revert_seconds = 0
+
+        self._build_ui()
+        self._populate_controls()
+
+    def find_monitor(self, name: str) -> MonitorState | None:
+        return next((m for m in self.monitors if m.name == name), None)
+
+    def get_selected(self) -> MonitorState | None:
+        return self.find_monitor(self.selected_name)
+
+    def select_monitor(self, name: str) -> None:
+        self.selected_name = name
+        self._populate_controls()
+
+    def _build_ui(self) -> None:
+        root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        root.set_margin_top(14)
+        root.set_margin_bottom(14)
+        root.set_margin_start(16)
+        root.set_margin_end(16)
+        self.add(root)
+
+        # Header title + quick subtitle
+        hdr = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        title = Gtk.Label(label="Display Settings")
+        title.set_xalign(0.0)
+        title.set_markup("<b><span size='large'>Display Settings</span></b>")
+        subtitle = Gtk.Label(
+            label="Drag monitors to arrange them, then click Apply. Changes auto-revert in 15s unless kept."
+        )
+        subtitle.get_style_context().add_class("lunar-subtitle")
+        subtitle.set_xalign(0.0)
+        hdr.pack_start(title, False, False, 0)
+        hdr.pack_start(subtitle, False, False, 0)
+        root.pack_start(hdr, False, False, 0)
+
+        # Inline safe-revert banner (hidden by default)
+        self.banner = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        self.banner.get_style_context().add_class("lunar-banner")
+        self.banner_label = Gtk.Label(label="")
+        self.banner_label.set_xalign(0.0)
+        self.banner.pack_start(self.banner_label, True, True, 0)
+        btn_keep = Gtk.Button(label="Keep Changes")
+        btn_keep.get_style_context().add_class("suggested-action")
+        btn_keep.connect("clicked", lambda *_: self._keep_changes())
+        btn_rev = Gtk.Button(label="Revert Now")
+        btn_rev.get_style_context().add_class("destructive-action")
+        btn_rev.connect("clicked", lambda *_: self._revert_now())
+        self.banner.pack_start(btn_keep, False, False, 0)
+        self.banner.pack_start(btn_rev, False, False, 0)
+        root.pack_start(self.banner, False, False, 0)
+
+        # Canvas card + quick arrangement actions
+        canvas_card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        canvas_card.get_style_context().add_class("lunar-card")
+        self.canvas = MonitorCanvas(self)
+        canvas_card.pack_start(self.canvas, True, True, 0)
+
+        quick_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        for label, cb in (
+            ("Swap L/R", self._on_swap_lr),
+            ("Align Row", self._on_align_row),
+            ("Mirror", self._on_mirror),
+            ("Detect", self._on_detect),
+        ):
+            b = Gtk.Button(label=label)
+            b.connect("clicked", cb)
+            quick_row.pack_start(b, False, False, 0)
+        self.status_label = Gtk.Label(label="")
+        self.status_label.get_style_context().add_class("lunar-subtitle")
+        self.status_label.set_xalign(1.0)
+        quick_row.pack_end(self.status_label, True, True, 0)
+        canvas_card.pack_start(quick_row, False, False, 0)
+        root.pack_start(canvas_card, True, True, 0)
+
+        # Selected monitor properties grid
+        props_card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        props_card.get_style_context().add_class("lunar-card")
+        grid = Gtk.Grid(column_spacing=14, row_spacing=10)
+        props_card.pack_start(grid, False, False, 0)
+
+        def add_label(text: str, row: int, col: int = 0) -> None:
+            lbl = Gtk.Label(label=text)
+            lbl.set_xalign(0.0)
+            lbl.get_style_context().add_class("lunar-field-label")
+            grid.attach(lbl, col, row, 1, 1)
+
+        add_label("Monitor:", 0, 0)
+        self.combo_monitor = Gtk.ComboBoxText()
+        self.combo_monitor.connect("changed", self._on_monitor_combo_changed)
+        grid.attach(self.combo_monitor, 1, 0, 1, 1)
+
+        toggles = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=14)
+        self.switch_enabled = Gtk.Switch()
+        self.switch_enabled.connect("notify::active", self._on_enabled_toggled)
+        lbl_en = Gtk.Label(label="Enabled")
+        self.btn_primary = Gtk.ToggleButton(label="Primary Display")
+        self.btn_primary.connect("toggled", self._on_primary_toggled)
+        toggles.pack_start(lbl_en, False, False, 0)
+        toggles.pack_start(self.switch_enabled, False, False, 0)
+        toggles.pack_start(self.btn_primary, False, False, 8)
+        grid.attach(toggles, 2, 0, 2, 1)
+
+        add_label("Resolution:", 1, 0)
+        self.combo_res = Gtk.ComboBoxText()
+        self.combo_res.connect("changed", self._on_res_changed)
+        grid.attach(self.combo_res, 1, 1, 1, 1)
+
+        add_label("Refresh Rate:", 1, 2)
+        self.combo_rate = Gtk.ComboBoxText()
+        self.combo_rate.connect("changed", self._on_rate_changed)
+        grid.attach(self.combo_rate, 3, 1, 1, 1)
+
+        add_label("Orientation:", 2, 0)
+        self.combo_rot = Gtk.ComboBoxText()
+        for rot_id, rot_label in ORIENTATIONS:
+            self.combo_rot.append(rot_id, rot_label)
+        self.combo_rot.connect("changed", self._on_rot_changed)
+        grid.attach(self.combo_rot, 1, 2, 1, 1)
+
+        add_label("Position (X, Y):", 2, 2)
+        pos_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        self.spin_x = Gtk.SpinButton.new_with_range(0, 16384, 1)
+        self.spin_y = Gtk.SpinButton.new_with_range(0, 16384, 1)
+        self.spin_x.connect("value-changed", self._on_pos_changed)
+        self.spin_y.connect("value-changed", self._on_pos_changed)
+        pos_box.pack_start(self.spin_x, True, True, 0)
+        pos_box.pack_start(self.spin_y, True, True, 0)
+        grid.attach(pos_box, 3, 2, 1, 1)
+
+        root.pack_start(props_card, False, False, 0)
+
+        # Bottom action buttons
+        btn_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        btn_reset = Gtk.Button(label="Reset Auto")
+        btn_reset.connect("clicked", self._on_reset_auto)
+        btn_close = Gtk.Button(label="Close")
+        btn_close.connect("clicked", lambda *_: Gtk.main_quit())
+        btn_apply = Gtk.Button(label="Apply")
+        btn_apply.get_style_context().add_class("suggested-action")
+        btn_apply.connect("clicked", self._on_apply)
+
+        btn_row.pack_start(btn_reset, False, False, 0)
+        btn_row.pack_end(btn_apply, False, False, 0)
+        btn_row.pack_end(btn_close, False, False, 0)
+        root.pack_start(btn_row, False, False, 0)
+
+        self.show_all()
+        self.banner.hide()
+
+    def _populate_controls(self) -> None:
+        self._updating_ui = True
+        try:
+            self.combo_monitor.remove_all()
+            for m in self.monitors:
+                tag = f"{m.name} (Primary)" if m.primary else m.name
+                self.combo_monitor.append(m.name, tag)
+            if self.selected_name:
+                self.combo_monitor.set_active_id(self.selected_name)
+
+            m = self.get_selected()
+            if not m:
+                self.status_label.set_text("No connected displays found")
+                return
+
+            enabled_count = sum(1 for item in self.monitors if item.enabled)
+            self.switch_enabled.set_active(m.enabled)
+            self.switch_enabled.set_sensitive(not (m.enabled and enabled_count <= 1))
+
+            self.btn_primary.set_active(m.primary)
+            self.btn_primary.set_sensitive(m.enabled)
+
+            self.combo_res.remove_all()
+            for res in m.modes:
+                self.combo_res.append(res, res)
+            self.combo_res.set_active_id(m.mode)
+            self.combo_res.set_sensitive(m.enabled)
+
+            self._populate_rates(m)
+            self.combo_rate.set_sensitive(m.enabled)
+
+            self.combo_rot.set_active_id(m.rotation)
+            self.combo_rot.set_sensitive(m.enabled)
+
+            self.spin_x.set_value(m.x)
+            self.spin_y.set_value(m.y)
+            self.spin_x.set_sensitive(m.enabled)
+            self.spin_y.set_sensitive(m.enabled)
+
+            self.status_label.set_text(f"{len(self.monitors)} connected  \u2022  {enabled_count} active")
+            self.canvas.queue_draw()
+        finally:
+            self._updating_ui = False
+
+    def _populate_rates(self, m: MonitorState) -> None:
+        self.combo_rate.remove_all()
+        rates = m.modes.get(m.mode, [60.0])
+        for r in rates:
+            key = f"{r:.2f}"
+            self.combo_rate.append(key, f"{r:.2f} Hz" if r > 1.0 else "Auto")
+        target = f"{m.rate:.2f}"
+        if not self.combo_rate.set_active_id(target) and rates:
+            m.rate = rates[0]
+            self.combo_rate.set_active_id(f"{m.rate:.2f}")
+
+    def sync_position_fields(self) -> None:
+        m = self.get_selected()
+        if not m:
+            return
+        self._updating_ui = True
+        try:
+            self.spin_x.set_value(m.x)
+            self.spin_y.set_value(m.y)
+        finally:
+            self._updating_ui = False
+
+    def _on_monitor_combo_changed(self, combo: Gtk.ComboBoxText) -> None:
+        if self._updating_ui:
+            return
+        cid = combo.get_active_id()
+        if cid:
+            self.selected_name = cid
+            self._populate_controls()
+
+    def _on_enabled_toggled(self, sw: Gtk.Switch, _pspec: object) -> None:
+        if self._updating_ui:
+            return
+        m = self.get_selected()
+        if not m:
+            return
+        want = sw.get_active()
+        if not want and sum(1 for x in self.monitors if x.enabled) <= 1:
+            self._updating_ui = True
+            sw.set_active(True)
+            self._updating_ui = False
+            return
+        m.enabled = want
+        if want and sum(1 for x in self.monitors if x.enabled) > 1:
+            others = [x for x in self.monitors if x.enabled and x.name != m.name]
+            m.x = max((o.x + o.mode_dims()[0] for o in others), default=0)
+            m.y = 0
+        elif not want and m.primary:
+            m.primary = False
+            for o in self.monitors:
+                if o.enabled:
+                    o.primary = True
+                    break
+        normalize_positions(self.monitors)
+        self._populate_controls()
+
+    def _on_primary_toggled(self, btn: Gtk.ToggleButton) -> None:
+        if self._updating_ui:
+            return
+        m = self.get_selected()
+        if not m or not m.enabled:
+            return
+        if not btn.get_active():
+            self._updating_ui = True
+            btn.set_active(True)
+            self._updating_ui = False
+            return
+        for item in self.monitors:
+            item.primary = (item.name == m.name)
+        self._populate_controls()
+
+    def _on_res_changed(self, combo: Gtk.ComboBoxText) -> None:
+        if self._updating_ui:
+            return
+        m = self.get_selected()
+        res = combo.get_active_id()
+        if m and res and res in m.modes:
+            m.mode = res
+            if m.rate not in m.modes[res]:
+                m.rate = m.modes[res][0]
+            self._updating_ui = True
+            self._populate_rates(m)
+            self._updating_ui = False
+            self.canvas.queue_draw()
+
+    def _on_rate_changed(self, combo: Gtk.ComboBoxText) -> None:
+        if self._updating_ui:
+            return
+        m = self.get_selected()
+        r_id = combo.get_active_id()
+        if m and r_id:
+            try:
+                m.rate = float(r_id)
+            except ValueError:
+                pass
+
+    def _on_rot_changed(self, combo: Gtk.ComboBoxText) -> None:
+        if self._updating_ui:
+            return
+        m = self.get_selected()
+        rot = combo.get_active_id()
+        if m and rot:
+            m.rotation = rot
+            self.canvas.queue_draw()
+
+    def _on_pos_changed(self, _spin: Gtk.SpinButton) -> None:
+        if self._updating_ui:
+            return
+        m = self.get_selected()
+        if m and m.enabled:
+            m.x = int(self.spin_x.get_value())
+            m.y = int(self.spin_y.get_value())
+            self.canvas.queue_draw()
+
+    def _on_swap_lr(self, _btn: Gtk.Button) -> None:
+        enabled = sorted([m for m in self.monitors if m.enabled], key=lambda item: (item.x, item.name))
+        if len(enabled) < 2:
+            return
+        enabled.reverse()
+        cur_x = 0
+        for m in enabled:
+            m.x = cur_x
+            m.y = 0
+            cur_x += m.mode_dims()[0]
+        self._populate_controls()
+
+    def _on_align_row(self, _btn: Gtk.Button) -> None:
+        enabled = sorted([m for m in self.monitors if m.enabled], key=lambda item: (item.x, item.name))
+        cur_x = 0
+        for m in enabled:
+            m.x = cur_x
+            m.y = 0
+            cur_x += m.mode_dims()[0]
+        self._populate_controls()
+
+    def _on_mirror(self, _btn: Gtk.Button) -> None:
+        enabled = [m for m in self.monitors if m.enabled]
+        if len(enabled) < 2:
+            return
+        common = set(enabled[0].modes.keys())
+        for m in enabled[1:]:
+            common &= set(m.modes.keys())
+        best_mode = ""
+        if common:
+            best_mode = max(
+                common,
+                key=lambda r: (int(r.split("x")[0]) * int(r.split("x")[1]), int(r.split("x")[0])),
+            )
+        for m in enabled:
+            m.x = 0
+            m.y = 0
+            if best_mode and best_mode in m.modes:
+                m.mode = best_mode
+                m.rate = m.modes[best_mode][0]
+        self._populate_controls()
+
+    def _on_detect(self, _btn: Gtk.Button) -> None:
+        self.monitors = parse_xrandr()
+        if self.monitors and not self.find_monitor(self.selected_name):
+            self.selected_name = self.monitors[0].name
+        self._populate_controls()
+
+    def _on_reset_auto(self, _btn: Gtk.Button) -> None:
+        if not self.monitors:
+            return
+        prim = next((m for m in self.monitors if m.primary), None)
+        if prim is None:
+            prim = max(self.monitors, key=lambda m: (m.mm_w, m.name))
+        ordered = [prim] + [m for m in self.monitors if m.name != prim.name]
+        cur_x = 0
+        for idx, m in enumerate(ordered):
+            m.enabled = True
+            m.primary = (idx == 0)
+            m.rotation = "normal"
+            if m.pref_mode in m.modes:
+                m.mode = m.pref_mode
+                m.rate = m.pref_rate
+            m.x = cur_x
+            m.y = 0
+            cur_x += m.mode_dims()[0]
+        self.selected_name = prim.name
+        self._populate_controls()
+
+    def _cancel_timer(self) -> None:
+        if self._revert_timer_id:
+            GLib.source_remove(self._revert_timer_id)
+            self._revert_timer_id = 0
+
+    def _on_apply(self, _btn: Gtk.Button) -> None:
+        live_before = parse_xrandr()
+        self._revert_cmd = build_xrandr_command(live_before)
+        cmd = build_xrandr_command(self.monitors)
+
+        res = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        if res.returncode != 0:
+            self.status_label.set_text(f"Apply failed: {res.stderr.strip() or res.returncode}")
+            return
+
+        self._last_applied_cmd = cmd
+        normalize_positions(self.monitors)
+        self._populate_controls()
+
+        self._cancel_timer()
+        self._revert_seconds = 15
+        self.banner_label.set_text(
+            f"Keep these display settings? Reverting in {self._revert_seconds}s..."
+        )
+        self.banner.show_all()
+        self._revert_timer_id = GLib.timeout_add_seconds(1, self._on_revert_tick)
+
+    def _on_revert_tick(self) -> bool:
+        self._revert_seconds -= 1
+        if self._revert_seconds <= 0:
+            self._revert_timer_id = 0
+            self._revert_now()
+            return False
+        self.banner_label.set_text(
+            f"Keep these display settings? Reverting in {self._revert_seconds}s..."
+        )
+        return True
+
+    def _keep_changes(self) -> None:
+        self._cancel_timer()
+        self.banner.hide()
+        cmd = getattr(self, "_last_applied_cmd", None) or build_xrandr_command(self.monitors)
+        saved = save_monitor_layout(cmd)
+        self.status_label.set_text(f"Saved layout to {saved.name}")
+
+    def _revert_now(self) -> None:
+        self._cancel_timer()
+        self.banner.hide()
+        if self._revert_cmd:
+            subprocess.run(self._revert_cmd, check=False)
+            self._revert_cmd = None
+        self.monitors = parse_xrandr()
+        self._populate_controls()
+        self.status_label.set_text("Reverted to previous display layout")
+
+
+def main() -> int:
+    if "--dry-run" in sys.argv[1:]:
+        monitors = parse_xrandr()
+        for m in monitors:
+            print(
+                f"MONITOR {m.name}: primary={m.primary} enabled={m.enabled} "
+                f"mode={m.mode}@{m.rate:.2f} pos=({m.x},{m.y}) rot={m.rotation} "
+                f"modes={len(m.modes)}"
+            )
+        print("CMD:", shlex.join(build_xrandr_command(monitors)))
+        return 0
+
+    app = DisplaySettingsApp()
+    app.connect("destroy", Gtk.main_quit)
+    Gtk.main()
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

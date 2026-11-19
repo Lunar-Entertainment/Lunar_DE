@@ -19,6 +19,7 @@ trap 'rm -rf "${STAGE_DIR}"' EXIT
 mkdir -p \
     "${STAGE_DIR}/DEBIAN" \
     "${STAGE_DIR}/usr/bin" \
+    "${STAGE_DIR}/usr/share/applications" \
     "${STAGE_DIR}/usr/share/xsessions" \
     "${STAGE_DIR}/usr/share/xdg-desktop-portal" \
     "${STAGE_DIR}/usr/share/polkit-1/rules.d" \
@@ -34,6 +35,9 @@ install -m 0755 "${BUILD_DIR}/lunar-panel" "${STAGE_DIR}/usr/bin/lunar-panel"
 install -m 0755 "${ROOT_DIR}/scripts/lunar-session" "${STAGE_DIR}/usr/bin/lunar-session"
 install -m 0755 "${ROOT_DIR}/scripts/lunar-debug" "${STAGE_DIR}/usr/bin/lunar-debug"
 install -m 0755 "${ROOT_DIR}/scripts/lunar-restart-update" "${STAGE_DIR}/usr/bin/lunar-restart-update"
+install -m 0755 "${ROOT_DIR}/scripts/lunar-displays" "${STAGE_DIR}/usr/bin/lunar-displays"
+
+install -m 0644 "${ROOT_DIR}/config/lunar-displays.desktop" "${STAGE_DIR}/usr/share/applications/lunar-displays.desktop"
 
 cat > "${STAGE_DIR}/usr/share/xsessions/lunar.desktop" <<'EOF'
 [Desktop Entry]
@@ -105,7 +109,7 @@ Architecture: ${ARCH}
 Installed-Size: ${INSTALLED_KB}
 Maintainer: Lunar Entertainment <lunar@users.noreply.github.com>
 Homepage: https://lunar-entertainment.github.io/Lunar_DE/
-Depends: libc6, libstdc++6, libxcb1, libxcb-util1, libxcb-ewmh2, libxcb-icccm4, libxcb-keysyms1, libxcb-randr0, libxkbcommon0, libjpeg-turbo8 | libjpeg8, libpng16-16t64 | libpng16-16, libfontconfig1, libfreetype6, picom, python3, python3-gi, x11-xserver-utils, xdotool, pulseaudio-utils
+Depends: libc6, libstdc++6, libxcb1, libxcb-util1, libxcb-ewmh2, libxcb-icccm4, libxcb-keysyms1, libxcb-randr0, libxkbcommon0, libjpeg-turbo8 | libjpeg8, libpng16-16t64 | libpng16-16, libfontconfig1, libfreetype6, picom, python3, python3-gi, python3-gi-cairo, gir1.2-gtk-3.0, x11-xserver-utils, xdotool, pulseaudio-utils
 Recommends: python3-websockets, ffmpeg
 Description: Minimal modular C++20 X11 Desktop Environment
  Lunar DE is built from scratch in C++20 directly on libxcb, featuring

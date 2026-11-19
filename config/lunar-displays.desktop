@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Display Settings
+GenericName=Displays
+Comment=Configure monitors, resolution, refresh rate, and arrangement
+Exec=lunar-displays
+Icon=preferences-desktop-display
+Terminal=false
+Categories=Settings;HardwareSettings;
+Keywords=Display;Displays;Monitor;Monitors;Screen;Resolution;Refresh;xrandr;

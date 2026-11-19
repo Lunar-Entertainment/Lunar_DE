@@ -73,10 +73,11 @@ constexpr std::array<const char*, 4> kWpGroups = {
 // Context Menu layout constants
 constexpr uint16_t kCtxW = 228;
 constexpr int kCtxRowH = 34;
-constexpr std::array<const char*, 8> kCtxLabels = {
+constexpr std::array<const char*, 9> kCtxLabels = {
     "All Applications",
     "Change Wallpaper (32+)",
     "Appearance (Bar Style)",
+    "Display Settings",
     "Open Terminal",
     "Files (Nautilus)",
     "System Settings",
@@ -1170,21 +1171,25 @@ void Panel::handle_context_menu_click(int16_t x, int16_t y) {
         break;
     case 3:
         close_popup();
-        spawn_terminal();
+        spawn_display_settings();
         break;
     case 4:
         close_popup();
-        spawn_command("nautilus");
+        spawn_terminal();
         break;
     case 5:
         close_popup();
-        spawn_command("gnome-control-center");
+        spawn_command("nautilus");
         break;
     case 6:
         close_popup();
-        send_switch_desktop((current_desktop_ + 1) % num_desktops_);
+        spawn_command("gnome-control-center");
         break;
     case 7:
+        close_popup();
+        send_switch_desktop((current_desktop_ + 1) % num_desktops_);
+        break;
+    case 8:
         close_popup();
         send_wm_exit();
         break;
@@ -2623,29 +2628,8 @@ void Panel::handle_appearance_click(int16_t x, int16_t y, uint8_t button) {
         if (x >= bx0 && x <= bx0 + card_w) {
             open_popup(PopupKind::WallpaperPicker);
         } else if (x >= bx1 && x <= bx1 + card_w) {
-            std::filesystem::path dir = lunar_de_config_dir();
-            if (dir.empty()) dir = "/tmp";
-            std::error_code ec;
-            std::filesystem::create_directories(dir, ec);
-            const std::string script_path = (dir / "monitor_layout.sh").string();
-            const std::string swap_cmd =
-                "python3 -c \""
-                "import subprocess, re, pathlib;"
-                "out = subprocess.check_output(['xrandr', '--query'], text=True);"
-                "mons = re.findall(r'^(\\S+)\\s+connected\\s+(primary\\s+)?(\\d+x\\d+)\\+(\\d+)\\+(\\d+)', out, re.M);"
-                "prim = next((m for m in mons if m[1]), mons[0] if mons else None);"
-                "secs = [m for m in mons if prim and m[0] != prim[0]];"
-                "prim and secs and ("
-                "sec := secs[0], "
-                "cmd := (f'xrandr --output {sec[0]} --auto --pos 0x0 --output {prim[0]} --primary --auto --right-of {sec[0]}' "
-                "if int(sec[3]) >= int(prim[3]) else "
-                "f'xrandr --output {prim[0]} --primary --auto --pos 0x0 --output {sec[0]} --auto --right-of {prim[0]}'), "
-                "subprocess.run(cmd, shell=True), "
-                "pathlib.Path('" + script_path + "').write_text('#!/bin/sh\\n' + cmd + '\\n')"
-                ")\" >/dev/null 2>&1";
-            if (std::system(swap_cmd.c_str()) == 0) {
-                close_popup();
-            }
+            close_popup();
+            spawn_display_settings();
         } else if (x >= bx2 && x <= bx2 + card_w) {
             close_popup();
             spawn_command("gnome-control-center");
@@ -2736,7 +2720,7 @@ void Panel::draw_appearance() {
     };
     constexpr std::array<ActionBtnSpec, 3> kBtns = {{
         {"Wallpapers (32+)", 0x262d3b, 0xf1f5f9},
-        {"Swap Monitors (L/R)", 0x1e3a5f, 0x93c5fd},
+        {"Display Settings", 0x1e3a5f, 0x93c5fd},
         {"System Settings", 0x262d3b, 0xf1f5f9},
     }};
     for (size_t i = 0; i < kBtns.size(); ++i) {
@@ -2749,29 +2733,39 @@ void Panel::draw_appearance() {
     }
 }
 
+namespace {
+
+std::string resolve_lunar_tool(const char* tool_name) {
+    std::error_code ec;
+    const std::filesystem::path self_exe(resolve_self_exe_path("/usr/bin/lunar-panel"));
+    const std::filesystem::path exe_dir = self_exe.parent_path();
+    const std::array<std::filesystem::path, 3> candidates = {
+        exe_dir / tool_name,
+        exe_dir / ".." / "scripts" / tool_name,
+        std::filesystem::path("/usr/bin") / tool_name,
+    };
+    for (const auto& cand : candidates) {
+        if (std::filesystem::exists(cand, ec)) {
+            return cand.lexically_normal().string();
+        }
+    }
+    return tool_name;
+}
+
+} // namespace
+
+void Panel::spawn_display_settings() {
+    const std::string tool = resolve_lunar_tool("lunar-displays");
+    const std::string cmd = "'" + tool + "'";
+    spawn_command(cmd.c_str());
+}
+
 void Panel::power_off_system() {
     spawn_command("systemctl poweroff || loginctl poweroff");
 }
 
 void Panel::restart_and_update_lunar() {
-    std::error_code ec;
-    const std::filesystem::path self_exe(resolve_self_exe_path("/usr/bin/lunar-panel"));
-    const std::filesystem::path exe_dir = self_exe.parent_path();
-    std::string script_path;
-    const std::array<std::filesystem::path, 3> candidates = {
-        exe_dir / "lunar-restart-update",
-        exe_dir / ".." / "scripts" / "lunar-restart-update",
-        std::filesystem::path("/usr/bin/lunar-restart-update"),
-    };
-    for (const auto& cand : candidates) {
-        if (std::filesystem::exists(cand, ec)) {
-            script_path = cand.lexically_normal().string();
-            break;
-        }
-    }
-    if (script_path.empty()) {
-        script_path = "lunar-restart-update";
-    }
+    const std::string script_path = resolve_lunar_tool("lunar-restart-update");
     const std::string cmd = "'" + script_path + "' --panel-pid " + std::to_string(getpid());
     spawn_command(cmd.c_str());
 }

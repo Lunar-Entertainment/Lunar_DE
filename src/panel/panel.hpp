@@ -141,6 +141,7 @@ private:
     void redraw();
     void spawn_command(const char* cmd);
     void spawn_terminal();
+    void spawn_display_settings();
 
     xcb_connection_t* conn_ = nullptr;
     int screen_idx_ = 0;
