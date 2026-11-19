@@ -12,6 +12,7 @@ echo "[lunar] Installing binaries and session files (requires sudo)..."
 sudo install -Dm755 "${BUILD_DIR}/lunar-wm" /usr/local/bin/lunar-wm
 sudo install -Dm755 "${BUILD_DIR}/lunar-panel" /usr/local/bin/lunar-panel
 sudo install -Dm755 "${ROOT_DIR}/scripts/lunar-session" /usr/local/bin/lunar-session
+sudo install -Dm755 "${ROOT_DIR}/scripts/lunar-debug" /usr/local/bin/lunar-debug
 
 sudo install -Dm644 "${ROOT_DIR}/config/picom.conf" /usr/local/share/lunar-de/config/picom.conf
 sudo install -Dm644 "${ROOT_DIR}/config/lunar-portals.conf" /usr/share/xdg-desktop-portal/lunar-portals.conf

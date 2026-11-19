@@ -22,9 +22,11 @@ else
     LUNAR_WM="$(command -v lunar-wm || echo /usr/bin/lunar-wm)"
 fi
 
-unset WAYLAND_DISPLAY
+unset WAYLAND_DISPLAY SESSION_MANAGER GNOME_DESKTOP_SESSION_ID GNOME_SHELL_SESSION_MODE GTK_MODULES QT_ACCESSIBILITY
+export DESKTOP_SESSION=lunar
+export XDG_SESSION_DESKTOP=lunar
 export XDG_SESSION_TYPE=x11
-export XDG_CURRENT_DESKTOP=Lunar:GNOME
+export XDG_CURRENT_DESKTOP=Lunar
 export GDK_BACKEND=x11
 export QT_QPA_PLATFORM=xcb
 export SDL_VIDEODRIVER=x11
@@ -35,35 +37,51 @@ export GIO_USE_VFS=local
 export NO_AT_BRIDGE=1
 export GTK_A11Y=none
 
-# Ensure xdg-desktop-portal resolves to gtk (never gnome) so GTK apps don't stall 25s
+# Ensure xdg-desktop-portal resolves cleanly without gnome.portal fallback timeouts
 PORTAL_USER_DIR="${XDG_CONFIG_HOME:-${HOME}/.config}/xdg-desktop-portal"
-if [[ ! -f "${PORTAL_USER_DIR}/lunar-portals.conf" ]]; then
-    mkdir -p "${PORTAL_USER_DIR}"
-    cat > "${PORTAL_USER_DIR}/lunar-portals.conf" <<'EOF'
+mkdir -p "${PORTAL_USER_DIR}"
+cat > "${PORTAL_USER_DIR}/lunar-portals.conf" <<'EOF'
 [preferred]
 default=gtk;
 org.freedesktop.impl.portal.Secret=gnome-keyring;
+org.freedesktop.impl.portal.Background=none;
+org.freedesktop.impl.portal.Clipboard=none;
+org.freedesktop.impl.portal.GlobalShortcuts=none;
+org.freedesktop.impl.portal.InputCapture=none;
+org.freedesktop.impl.portal.RemoteDesktop=none;
+org.freedesktop.impl.portal.ScreenCast=none;
+org.freedesktop.impl.portal.Screenshot=none;
+org.freedesktop.impl.portal.Usb=none;
+org.freedesktop.impl.portal.Wallpaper=none;
 EOF
-fi
 
 PID_FILE="/tmp/lunar-de-pids.txt"
 : > "${PID_FILE}"
 
 if command -v systemctl >/dev/null 2>&1; then
-    systemctl --user unset-environment WAYLAND_DISPLAY 2>/dev/null || true
-    systemctl --user import-environment \
-        DISPLAY XAUTHORITY LANG LC_ALL XDG_SESSION_TYPE XDG_CURRENT_DESKTOP \
-        GDK_BACKEND QT_QPA_PLATFORM GTK_USE_PORTAL GIO_USE_VFS NO_AT_BRIDGE GTK_A11Y \
+    systemctl --user unset-environment \
+        WAYLAND_DISPLAY SESSION_MANAGER GNOME_DESKTOP_SESSION_ID \
+        GNOME_SHELL_SESSION_MODE GTK_MODULES QT_ACCESSIBILITY \
         2>/dev/null || true
-    systemctl --user restart xdg-desktop-portal.service 2>/dev/null &
+    systemctl --user import-environment \
+        DISPLAY XAUTHORITY LANG LC_ALL DESKTOP_SESSION XDG_SESSION_DESKTOP \
+        XDG_SESSION_TYPE XDG_CURRENT_DESKTOP GDK_BACKEND QT_QPA_PLATFORM \
+        GTK_USE_PORTAL GIO_USE_VFS NO_AT_BRIDGE GTK_A11Y \
+        2>/dev/null || true
 fi
 
 if command -v dbus-update-activation-environment >/dev/null 2>&1; then
     dbus-update-activation-environment --systemd \
-        DISPLAY XAUTHORITY LANG LC_ALL XDG_SESSION_TYPE XDG_CURRENT_DESKTOP \
-        GDK_BACKEND QT_QPA_PLATFORM SDL_VIDEODRIVER CLUTTER_BACKEND \
-        ELECTRON_OZONE_PLATFORM_HINT GTK_USE_PORTAL GIO_USE_VFS NO_AT_BRIDGE GTK_A11Y \
+        DISPLAY XAUTHORITY LANG LC_ALL DESKTOP_SESSION XDG_SESSION_DESKTOP \
+        XDG_SESSION_TYPE XDG_CURRENT_DESKTOP GDK_BACKEND QT_QPA_PLATFORM \
+        SDL_VIDEODRIVER CLUTTER_BACKEND ELECTRON_OZONE_PLATFORM_HINT \
+        GTK_USE_PORTAL GIO_USE_VFS NO_AT_BRIDGE GTK_A11Y \
         2>/dev/null || true
+fi
+
+if command -v systemctl >/dev/null 2>&1; then
+    systemctl --user reset-failed xdg-desktop-portal.service 2>/dev/null || true
+    systemctl --user restart xdg-desktop-portal.service 2>/dev/null &
 fi
 
 CFG_DIR="${XDG_CONFIG_HOME:-${HOME}/.config}/lunar-de"

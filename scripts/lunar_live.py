@@ -119,7 +119,7 @@ def write_state(
         "error": error[-160:],
         "ts": time.time(),
     }
-    tmp = STATE_PATH.with_suffix(".tmp")
+    tmp = STATE_PATH.with_name(f".{STATE_PATH.name}.{os.getpid()}.tmp")
     tmp.write_text(json.dumps(payload), encoding="utf-8")
     tmp.replace(STATE_PATH)
 

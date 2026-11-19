@@ -500,6 +500,9 @@ void AppRegistry::launch_app(const DesktopApp& app) {
     if (pid == 0) {
         setsid();
         prepare_x11_app_env();
+        if (cmd.find("gnome-control-center") != std::string::npos) {
+            setenv("XDG_CURRENT_DESKTOP", "GNOME", 1);
+        }
         if (!app.working_dir.empty()) {
             if (chdir(app.working_dir.c_str()) != 0) {
                 // ignore if directory missing

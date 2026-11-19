@@ -69,6 +69,11 @@ inline constexpr uint32_t kWmReloadDesktopIcons        = 4;
 
 inline void prepare_x11_app_env() {
     unsetenv("WAYLAND_DISPLAY");
+    unsetenv("SESSION_MANAGER");
+    unsetenv("GNOME_DESKTOP_SESSION_ID");
+    unsetenv("GNOME_SHELL_SESSION_MODE");
+    unsetenv("GTK_MODULES");
+    unsetenv("QT_ACCESSIBILITY");
     setenv("GDK_BACKEND", "x11", 1);
     setenv("QT_QPA_PLATFORM", "xcb", 1);
     setenv("SDL_VIDEODRIVER", "x11", 1);
@@ -78,7 +83,7 @@ inline void prepare_x11_app_env() {
     setenv("GIO_USE_VFS", "local", 1);
     setenv("NO_AT_BRIDGE", "1", 1);
     setenv("GTK_A11Y", "none", 1);
-    setenv("XDG_CURRENT_DESKTOP", "Lunar:GNOME", 1);
+    setenv("XDG_CURRENT_DESKTOP", "Lunar", 1);
 }
 
 inline std::vector<MonitorInfo> query_monitors(xcb_connection_t* conn, const xcb_screen_t* screen) {

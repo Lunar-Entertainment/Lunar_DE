@@ -1,0 +1,108 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+    cat <<'EOF'
+Usage: lunar-debug [OPTION]
+Diagnose Lunar DE session health, portal activation, monitors, and app stalls.
+
+  (no options)   Print full diagnostic report
+  -f, --follow   Follow live user journal logs (journalctl --user -f)
+  --ping-portal  Time a live D-Bus Peer.Ping call to org.freedesktop.portal.Desktop
+  -h, --help     Show this help message
+EOF
+}
+
+ping_portal() {
+    if ! command -v gdbus >/dev/null 2>&1; then
+        echo "gdbus not found; install libglib2.0-bin" >&2
+        return 1
+    fi
+    local start_ms end_ms rc
+    start_ms=$(date +%s%3N)
+    set +e
+    gdbus call --session \
+        --dest org.freedesktop.portal.Desktop \
+        --object-path /org/freedesktop/portal/desktop \
+        --method org.freedesktop.DBus.Peer.Ping
+    rc=$?
+    set -e
+    end_ms=$(date +%s%3N)
+    echo "Portal Ping: rc=${rc} elapsed=$((end_ms - start_ms))ms"
+    return "${rc}"
+}
+
+section() {
+    printf '\n=== %s ===\n' "$1"
+}
+
+case "${1:-}" in
+    -f|--follow)
+        exec journalctl --user -f
+        ;;
+    --ping-portal)
+        ping_portal
+        exit $?
+        ;;
+    -h|--help)
+        usage
+        exit 0
+        ;;
+    "")
+        ;;
+    *)
+        usage >&2
+        exit 2
+        ;;
+esac
+
+section "Package & Binaries"
+dpkg-query -W -f='${Package} ${Version} ${Status}\n' lunar-de 2>&1 || true
+ls -la /usr/bin/lunar-* /usr/local/bin/lunar-* 2>/dev/null || true
+
+section "Session Environment"
+env | grep -E '^(DISPLAY|XDG_CURRENT_DESKTOP|XDG_SESSION_DESKTOP|DESKTOP_SESSION|XDG_SESSION_TYPE|SESSION_MANAGER|DBUS_SESSION_BUS_ADDRESS|GTK_USE_PORTAL|GIO_USE_VFS|NO_AT_BRIDGE|GTK_A11Y)=' | sort || true
+
+if command -v systemctl >/dev/null 2>&1; then
+    section "systemd --user Environment"
+    systemctl --user show-environment 2>/dev/null | grep -E '^(DISPLAY|XDG_CURRENT_DESKTOP|XDG_SESSION_DESKTOP|DESKTOP_SESSION|SESSION_MANAGER|GNOME_DESKTOP_SESSION_ID|GNOME_SHELL_SESSION_MODE|GTK_MODULES|QT_ACCESSIBILITY)=' | sort || true
+
+    section "Portal Services Status"
+    systemctl --user status xdg-desktop-portal.service xdg-desktop-portal-gtk.service --no-pager 2>&1 || true
+
+    section "Failed Units & Pending Jobs"
+    systemctl --user list-units --failed --no-pager 2>&1 || true
+    systemctl --user list-jobs --no-pager 2>&1 || true
+fi
+
+section "Active Portal Configs"
+for f in \
+    "${XDG_CONFIG_HOME:-${HOME}/.config}/xdg-desktop-portal/lunar-portals.conf" \
+    "${XDG_CONFIG_HOME:-${HOME}/.config}/xdg-desktop-portal/portals.conf" \
+    "/usr/share/xdg-desktop-portal/lunar-portals.conf"; do
+    if [[ -f "$f" ]]; then
+        echo "--- $f ---"
+        cat "$f"
+    fi
+done
+
+if command -v xrandr >/dev/null 2>&1 && [[ -n "${DISPLAY:-}" ]]; then
+    section "Connected Monitors"
+    xrandr --query 2>/dev/null | grep -E ' connected' || true
+fi
+
+section "Top 10 CPU Processes"
+ps -eo pid,%cpu,%mem,etime,comm --sort=-%cpu | head -n 11 || true
+
+if command -v journalctl >/dev/null 2>&1; then
+    section "Recent User Journal Errors/Timeouts"
+    journalctl --user -b --no-pager 2>/dev/null | grep -iE 'timeout|failed|error|portal|dependency' | tail -n 30 || true
+fi
+
+section "Lunar DE Session Logs"
+for f in /tmp/lunar-wm.log /tmp/lunar-panel.log /tmp/lunar-picom.log /tmp/lunar-live.log; do
+    if [[ -f "$f" ]]; then
+        echo "--- $f (last 15 lines) ---"
+        tail -n 15 "$f"
+    fi
+done

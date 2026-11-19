@@ -2171,6 +2171,9 @@ void Panel::spawn_command(const char* cmd) {
     if (pid == 0) {
         setsid();
         prepare_x11_app_env();
+        if (cmd && std::string(cmd).find("gnome-control-center") != std::string::npos) {
+            setenv("XDG_CURRENT_DESKTOP", "GNOME", 1);
+        }
         const char* argv[] = {"/bin/sh", "-c", cmd, nullptr};
         execvp(argv[0], const_cast<char* const*>(argv));
         _exit(127);

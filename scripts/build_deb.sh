@@ -31,6 +31,7 @@ mkdir -p \
 install -m 0755 "${BUILD_DIR}/lunar-wm" "${STAGE_DIR}/usr/bin/lunar-wm"
 install -m 0755 "${BUILD_DIR}/lunar-panel" "${STAGE_DIR}/usr/bin/lunar-panel"
 install -m 0755 "${ROOT_DIR}/scripts/lunar-session" "${STAGE_DIR}/usr/bin/lunar-session"
+install -m 0755 "${ROOT_DIR}/scripts/lunar-debug" "${STAGE_DIR}/usr/bin/lunar-debug"
 
 cat > "${STAGE_DIR}/usr/share/xsessions/lunar.desktop" <<'EOF'
 [Desktop Entry]
