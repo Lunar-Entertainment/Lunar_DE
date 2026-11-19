@@ -1,0 +1,42 @@
+-----BEGIN PGP SIGNED MESSAGE-----
+Hash: SHA512
+
+Architectures: amd64
+Codename: noble
+Components: main
+Date: Thu, 19 Nov 2026 18:06:14 +0000
+Label: Lunar DE
+Origin: Lunar DE
+Suite: noble
+MD5Sum:
+ e1c6e12ad5c21ec5eb15e6eee8c6ce80              138 Release
+ 2e4f7581de87e91a1faf56fc6bd0d629             1088 main/binary-amd64/Packages
+ 3f57ed26112dd6b800b5ac740db4f8de              724 main/binary-amd64/Packages.gz
+SHA1:
+ b054160c7cf9a5e16069c62927523b61f5c59083              138 Release
+ 72736b53ccb8e1706514d75c9b10b41bffd7419d             1088 main/binary-amd64/Packages
+ 6113e5ed860b10f4858778055ae8bc168c4085f6              724 main/binary-amd64/Packages.gz
+SHA256:
+ 37d895e2b1e4dc2ead9fbf8b1dd88cbac84005d05da96bb1c3b83bf30dae203f              138 Release
+ 08cfe15a4615c15d2202cae838acebfe22139d009de90db4a7f7e2d8efddfeb8             1088 main/binary-amd64/Packages
+ 3623229756f0347e464f383136bdc6d6954543012e0283b322d05b9232764c49              724 main/binary-amd64/Packages.gz
+SHA512:
+ 507ee7d7e29ee33c0b3d174e7acebc9a3284f74614f3780be04a043183288d7acc0735ed5dc80ee13b76751611b785a71291ce31f1c781d174815c3f9db09083              138 Release
+ 5cf6f33a6c0fbb7db2496cc66334302c5aac5528b5682aea308fef5cad635789ada01b1360e1179b2d72310d757a18cce39252a14b0c0122894bebfbd1617d24             1088 main/binary-amd64/Packages
+ 0db4dac9e7511d0a98d4c27fdb3d4b3a6f5b33a5a8f21a368251fe89854efee0c8ac4a10081fa0502f307fe8a12f32ffdeaa78290df499f208c46cd868f7653f              724 main/binary-amd64/Packages.gz
+-----BEGIN PGP SIGNATURE-----
+
+iQIzBAEBCgAdFiEEl5uRxJ6IN2TZh4kTQI5scw+bP48FAmr/OpoACgkQQI5scw+b
+P48eYw/+MP7BPoF6y8W2R6fHfaF7lZdtYgIOrXHop94ldpqU5rWKos0wXnvaKMXT
+1nalAYrHoU0AmuypiezSJ8+KxG2FvyD1qzA+CUqpa3P3daS/73V3/FvZJsARiCL0
+rR7BtqaRR+RkC5+6YCxEyg79n4EA8U5cMqdWcqImS72eYJWrsQotKhvnxB7PcRZP
+Sp/jQEDYyGOCWzQzHVb8JeOuDWf7aiwKFhef5zICAbgnRXigUJwK1xfgZLCY0lXA
+xS+Ev6v4FdK1QgNEx7lJTEs9JTwDcPXHUh1yb+cVL14XnmNOnpn1K+goYVUl00hV
+6Q9h1/xQ17tWpYuVPiiPHLKYoUmvWs4cVPvWwV8Ro/CgcbpnNfkBMXdurn2CS2CI
+Gj54jlycVghEZh5zbMMUSMfdvGEUSlryF7yKBajc2r8yLuAiZcII3+vUN5QkWl4A
+v9Q/RI/lo8x4BNQmpkYEC9IIUhaQuLC2nW7ErAIQVgx39F3t02DCwB+pOzuBAk1E
+rvOEj9qmPFMa1k1AbIYb0vQyK+18vZJswkF9rdoyFijPpH6w9foGNOFMd1uuf0OS
+M1jEwbJNVi+pYtOtH2gjrwoWibYZzMjKQLa4rchMIqb8CDu95629uxLTCFNM7du+
+N3kM8vhpQ1penCgA7DbMi3Hjkr86ucFUf+6ue0kZjGW7XVo7b3g=
+=bMw5
+-----END PGP SIGNATURE-----

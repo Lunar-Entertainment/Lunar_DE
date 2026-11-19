@@ -30,7 +30,7 @@
 
     /* Nav */
     nav {
-      position: sticky; top: 0; z-index: 20;
+      position: sticky; top: 0; z-index: 50;
       backdrop-filter: blur(14px);
       background: rgba(11, 16, 27, 0.78);
       border-bottom: 1px solid var(--border);
@@ -45,7 +45,7 @@
     .nav-links a:hover { color: var(--text); text-decoration: none; }
 
     /* Hero */
-    .hero { padding: 72px 0 56px; text-align: center; }
+    .hero { padding: 64px 0 56px; text-align: center; }
     .pill-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-bottom: 20px; }
     .pill {
       font-size: 0.78rem; font-weight: 600; letter-spacing: 0.02em;
@@ -55,17 +55,17 @@
       color: #bae6fd;
     }
     h1 {
-      font-size: clamp(2.4rem, 5vw, 3.8rem);
+      font-size: clamp(2.3rem, 5vw, 3.7rem);
       line-height: 1.1; font-weight: 800; letter-spacing: -0.03em;
       background: linear-gradient(135deg, #ffffff 30%, #7dd3fc 70%, #a5b4fc 100%);
       -webkit-background-clip: text; -webkit-text-fill-color: transparent;
       margin-bottom: 18px;
     }
     .subtitle {
-      max-width: 680px; margin: 0 auto 30px;
-      color: var(--muted); font-size: 1.1rem;
+      max-width: 700px; margin: 0 auto 28px;
+      color: var(--muted); font-size: 1.08rem;
     }
-    .cta-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 14px; margin-bottom: 44px; }
+    .cta-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 14px; margin-bottom: 40px; }
     .btn {
       display: inline-flex; align-items: center; gap: 8px;
       padding: 12px 22px; border-radius: 10px; font-weight: 600; font-size: 0.95rem;
@@ -81,15 +81,15 @@
       border: 1px solid var(--border);
     }
 
-    /* Interactive Desktop Preview */
+    /* Interactive Mini-VM Shell */
     .preview-shell {
-      max-width: 900px; margin: 0 auto;
+      max-width: 960px; margin: 0 auto;
       background: var(--surface); border: 1px solid var(--border);
-      border-radius: 18px; padding: 16px; box-shadow: 0 24px 64px rgba(0,0,0,0.45);
+      border-radius: 18px; padding: 14px; box-shadow: 0 24px 64px rgba(0,0,0,0.48);
     }
     .preview-controls {
       display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;
-      margin-bottom: 12px; font-size: 0.85rem; color: var(--muted);
+      margin-bottom: 12px; font-size: 0.84rem; color: var(--muted); text-align: left;
     }
     .toggle-group { display: flex; gap: 6px; background: var(--bg); padding: 4px; border-radius: 10px; }
     .toggle-btn {
@@ -97,55 +97,192 @@
       padding: 6px 14px; border-radius: 7px; font-weight: 600; font-size: 0.82rem;
     }
     .toggle-btn.active { background: #2563eb; color: #fff; }
+
     .desktop-canvas {
-      position: relative; width: 100%; aspect-ratio: 16/9;
-      border-radius: 12px; overflow: hidden;
+      position: relative; width: 100%; aspect-ratio: 16/9; min-height: 440px;
+      border-radius: 12px; overflow: hidden; user-select: none;
       background: url('assets/01_lunar_eclipse.jpg') center/cover no-repeat;
-      transition: background-image 0.4s ease;
-      border: 1px solid rgba(255,255,255,0.1);
+      transition: background-image 0.35s ease;
+      border: 1px solid rgba(255,255,255,0.12);
+      text-align: left;
     }
-    .mock-bar {
-      position: absolute; left: 0; right: 0;
-      background: rgba(15, 23, 42, 0.78); backdrop-filter: blur(10px);
+
+    /* Desktop Icons inside Mini-VM */
+    .vm-desktop-icons {
+      position: absolute; left: 14px; top: 44px; display: flex; flex-direction: column; gap: 10px;
+      z-index: 2; transition: top 0.2s ease;
+    }
+    .desktop-canvas.mode-taskbar .vm-desktop-icons { top: 18px; }
+    .vm-dicon {
+      width: 74px; padding: 8px 4px; border-radius: 10px; border: 1px solid transparent;
+      display: flex; flex-direction: column; align-items: center; gap: 5px;
+      cursor: pointer; background: transparent; color: #f8fafc; font-size: 0.72rem;
+      text-shadow: 0 1px 3px rgba(0,0,0,0.85);
+    }
+    .vm-dicon:hover { background: rgba(255,255,255,0.08); }
+    .vm-dicon.selected { background: rgba(37,99,235,0.32); border-color: rgba(56,189,248,0.75); }
+    .vm-dicon-glyph {
+      width: 38px; height: 38px; border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-family: ui-monospace, monospace; font-weight: 700; font-size: 0.9rem;
+      background: rgba(15, 23, 42, 0.78); border: 1px solid rgba(255,255,255,0.16);
+      box-shadow: 0 6px 14px rgba(0,0,0,0.35);
+    }
+
+    /* Snap Preview Overlay */
+    .vm-snap-preview {
+      position: absolute; pointer-events: none; z-index: 9;
+      background: rgba(30, 58, 95, 0.55); border: 2px solid #38bdf8;
+      border-radius: 12px; opacity: 0; transition: opacity 0.12s ease, all 0.12s ease;
+      box-shadow: 0 0 24px rgba(56, 189, 248, 0.25);
+    }
+    .vm-snap-preview.visible { opacity: 1; }
+
+    /* Draggable/Resizable Windows */
+    .vm-window {
+      position: absolute; display: flex; flex-direction: column;
+      background: rgba(18, 22, 31, 0.96);
+      border-radius: 11px; border: 2px solid #334155;
+      box-shadow: 0 18px 46px rgba(0,0,0,0.55);
+      overflow: hidden; min-width: 270px; min-height: 170px;
+    }
+    .vm-window.focused { border-color: #38bdf8; box-shadow: 0 20px 52px rgba(0,0,0,0.68); }
+    .vm-window.maximized { border-radius: 0; border-width: 1px; }
+    .vm-window.hidden { display: none; }
+
+    .vm-titlebar {
+      height: 29px; flex: 0 0 29px; background: #1e293b;
       display: flex; align-items: center; justify-content: space-between;
-      padding: 0 14px; font-size: 0.78rem; color: #e2e8f0;
-      transition: all 0.25s ease;
+      padding: 0 10px; font-size: 0.76rem; color: #e2e8f0; cursor: grab;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .vm-titlebar:active { cursor: grabbing; }
+    .vm-title-text { font-weight: 600; pointer-events: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .vm-win-btns { display: flex; align-items: center; gap: 6px; }
+    .vm-win-btn {
+      width: 20px; height: 20px; border-radius: 50%; border: none;
+      display: inline-flex; align-items: center; justify-content: center;
+      font-size: 0.7rem; line-height: 1; cursor: pointer;
+      background: rgba(255,255,255,0.08); color: #cbd5e1;
+      transition: background 0.12s ease, color 0.12s ease;
+    }
+    .vm-win-btn:hover { background: rgba(255,255,255,0.2); color: #fff; }
+    .vm-win-btn.close:hover { background: #ef4444; color: #fff; }
+
+    /* Resize Handles */
+    .vm-window.maximized .vm-rz { display: none; }
+    .vm-rz { position: absolute; z-index: 5; }
+    .vm-rz.n { top: -3px; left: 8px; right: 8px; height: 6px; cursor: ns-resize; }
+    .vm-rz.s { bottom: -3px; left: 8px; right: 8px; height: 6px; cursor: ns-resize; }
+    .vm-rz.e { right: -3px; top: 8px; bottom: 8px; width: 6px; cursor: ew-resize; }
+    .vm-rz.w { left: -3px; top: 8px; bottom: 8px; width: 6px; cursor: ew-resize; }
+    .vm-rz.nw { top: -4px; left: -4px; width: 10px; height: 10px; cursor: nwse-resize; }
+    .vm-rz.ne { top: -4px; right: -4px; width: 10px; height: 10px; cursor: nesw-resize; }
+    .vm-rz.sw { bottom: -4px; left: -4px; width: 10px; height: 10px; cursor: nesw-resize; }
+    .vm-rz.se { bottom: -4px; right: -4px; width: 10px; height: 10px; cursor: nwse-resize; }
+
+    /* Interactive Terminal Inside VM */
+    .vm-term-body {
+      flex: 1; padding: 10px 12px; overflow-y: auto; cursor: text;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.76rem; line-height: 1.45; color: #e2e8f0;
+      user-select: text;
+    }
+    .term-line { white-space: pre-wrap; word-break: break-word; }
+    .term-muted { color: #94a3b8; }
+    .term-accent { color: #38bdf8; }
+    .term-green { color: #34d399; }
+    .term-input-row { display: flex; align-items: center; gap: 6px; margin-top: 2px; }
+    .term-prompt { color: #34d399; white-space: nowrap; font-weight: 600; }
+    #term-input {
+      flex: 1; background: transparent; border: none; outline: none;
+      color: #f8fafc; font: inherit; caret-color: #38bdf8; min-width: 40px;
+    }
+
+    /* Appearance Settings Window Inside VM */
+    .vm-app-body {
+      flex: 1; padding: 14px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px;
+    }
+    .vm-app-section-title { font-size: 0.78rem; font-weight: 700; color: #cbd5e1; margin-bottom: 6px; }
+    .vm-layout-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .vm-layout-card {
+      background: #1a2232; border: 1.5px solid #334155; border-radius: 9px;
+      padding: 10px; cursor: pointer; text-align: left; color: #f1f5f9;
+      transition: border-color 0.15s ease, background 0.15s ease;
+    }
+    .vm-layout-card.active { border-color: #38bdf8; background: #182b46; }
+    .vm-layout-card strong { display: block; font-size: 0.8rem; }
+    .vm-layout-card span { font-size: 0.7rem; color: #94a3b8; }
+    .vm-wp-mini-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+    .vm-wp-mini {
+      border-radius: 7px; overflow: hidden; border: 2px solid transparent;
+      cursor: pointer; aspect-ratio: 16/9; padding: 0; background: #0f172a;
+    }
+    .vm-wp-mini.active { border-color: #38bdf8; }
+    .vm-wp-mini img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+    /* Bar (Top Bar vs Win 11 Taskbar) */
+    .mock-bar {
+      position: absolute; left: 0; right: 0; z-index: 40;
+      background: rgba(15, 23, 42, 0.84); backdrop-filter: blur(12px);
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 12px; font-size: 0.76rem; color: #e2e8f0;
+      transition: height 0.2s ease, top 0.2s ease, bottom 0.2s ease;
     }
     .mock-bar.top { top: 0; height: 30px; border-bottom: 1px solid rgba(255,255,255,0.1); }
     .mock-bar.taskbar { bottom: 0; height: 44px; border-top: 1px solid rgba(255,255,255,0.14); }
-    .mock-dots { display: flex; align-items: center; gap: 8px; }
-    .ws-pill { width: 20px; height: 6px; border-radius: 99px; background: #f8fafc; }
+    .bar-left, .bar-center, .bar-right { display: flex; align-items: center; gap: 8px; }
+    .mock-bar.taskbar .bar-center { position: absolute; left: 50%; transform: translateX(-50%); }
+    .launcher-btn {
+      width: 24px; height: 24px; border-radius: 6px; border: none; cursor: pointer;
+      background: rgba(255,255,255,0.08);
+      display: grid; grid-template-columns: repeat(3, 3.5px); gap: 2px; place-content: center;
+    }
+    .mock-bar.taskbar .launcher-btn {
+      width: 30px; height: 30px; border-radius: 8px;
+      background: rgba(56,189,248,0.18); border: 1px solid rgba(56,189,248,0.42);
+    }
+    .launcher-btn:hover, .launcher-btn.active { background: #2563eb; }
+    .launcher-btn span { width: 3.5px; height: 3.5px; border-radius: 50%; background: #7dd3fc; }
+    .ws-pill { width: 18px; height: 6px; border-radius: 99px; background: #f8fafc; }
     .ws-dot { width: 6px; height: 6px; border-radius: 50%; background: rgba(255,255,255,0.4); }
-    .mock-center { display: flex; align-items: center; gap: 8px; }
-    .start-btn {
-      width: 28px; height: 28px; border-radius: 7px;
-      background: rgba(56,189,248,0.18); border: 1px solid rgba(56,189,248,0.4);
-      display: grid; grid-template-columns: repeat(3, 4px); gap: 2px; place-content: center;
+    .task-pills { display: flex; align-items: center; gap: 6px; }
+    .task-pill {
+      border: none; border-radius: 6px; padding: 3px 10px; font-size: 0.72rem; cursor: pointer;
+      background: rgba(255,255,255,0.09); color: #cbd5e1;
+      border-bottom: 2px solid transparent; transition: all 0.12s ease;
     }
-    .start-btn span { width: 4px; height: 4px; border-radius: 50%; background: #38bdf8; }
-    .win-pill {
-      padding: 4px 12px; border-radius: 6px; background: rgba(255,255,255,0.12);
-      border-bottom: 2px solid #38bdf8; font-size: 0.74rem;
+    .task-pill.active { background: rgba(255,255,255,0.18); color: #f8fafc; border-bottom-color: #38bdf8; }
+    .task-pill.minimized { opacity: 0.62; border-bottom-color: #64748b; }
+    .tray-btn {
+      border: none; background: rgba(255,255,255,0.08); color: #e2e8f0;
+      border-radius: 5px; padding: 2px 7px; font-size: 0.72rem; cursor: pointer;
     }
-    .mock-window {
-      position: absolute; left: 16%; top: 18%; width: 62%; height: 58%;
-      background: rgba(22, 26, 34, 0.94); border-radius: 12px;
-      border: 2px solid #38bdf8; box-shadow: 0 18px 40px rgba(0,0,0,0.5);
-      overflow: hidden; display: flex; flex-direction: column;
+    .tray-btn:hover { background: rgba(56,189,248,0.24); }
+
+    /* Mini App Menu Popover */
+    .vm-app-menu {
+      position: absolute; z-index: 45; width: 268px;
+      background: rgba(22, 26, 36, 0.97); border: 1px solid #334155;
+      border-radius: 12px; padding: 12px; box-shadow: 0 20px 44px rgba(0,0,0,0.65);
+      display: none; flex-direction: column; gap: 8px;
     }
-    .mock-titlebar {
-      height: 28px; background: #1e293b; display: flex; align-items: center;
-      justify-content: space-between; padding: 0 12px; font-size: 0.76rem; color: #cbd5e1;
+    .vm-app-menu.open { display: flex; }
+    .vm-app-menu.pos-top { top: 36px; left: 10px; }
+    .vm-app-menu.pos-taskbar { bottom: 52px; left: 50%; transform: translateX(-50%); }
+    .vm-menu-header { font-size: 0.75rem; font-weight: 700; color: #94a3b8; padding: 0 4px; }
+    .vm-menu-item {
+      display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+      padding: 8px 10px; border-radius: 8px; border: 1px solid transparent;
+      background: rgba(255,255,255,0.04); color: #f1f5f9; cursor: pointer; font-size: 0.82rem;
     }
-    .mock-term {
-      padding: 14px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-      font-size: 0.78rem; color: #34d399; text-align: left;
-    }
+    .vm-menu-item:hover { background: #1e293b; border-color: #38bdf8; }
+    .vm-menu-sub { display: block; font-size: 0.7rem; color: #94a3b8; }
 
     /* Sections */
-    section { padding: 64px 0; }
+    section { padding: 60px 0; }
     h2 { font-size: 1.9rem; font-weight: 700; margin-bottom: 10px; letter-spacing: -0.02em; }
-    .section-desc { color: var(--muted); margin-bottom: 32px; max-width: 640px; }
+    .section-desc { color: var(--muted); margin-bottom: 28px; max-width: 660px; }
 
     .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 18px; }
     .card {
@@ -167,16 +304,38 @@
       border: 2px solid transparent; background: var(--surface);
       transition: transform 0.15s ease, border-color 0.15s ease;
     }
-    .wp-card:hover { transform: translateY(-2px); border-color: var(--accent); }
+    .wp-card:hover, .wp-card.active { transform: translateY(-2px); border-color: var(--accent); }
     .wp-card img { width: 100%; aspect-ratio: 16/9; object-fit: cover; display: block; }
     .wp-card span { display: block; padding: 8px 12px; font-size: 0.84rem; color: var(--muted); }
 
-    /* Code & Shortcuts */
+    /* Tabbed Installer */
+    .install-tabs {
+      display: inline-flex; flex-wrap: wrap; gap: 6px;
+      background: var(--surface); border: 1px solid var(--border);
+      padding: 5px; border-radius: 12px; margin-bottom: 16px;
+    }
+    .install-tab {
+      border: none; background: transparent; color: var(--muted); cursor: pointer;
+      padding: 9px 16px; border-radius: 8px; font-weight: 600; font-size: 0.88rem;
+      transition: all 0.15s ease;
+    }
+    .install-tab.active { background: #2563eb; color: #fff; }
+    .install-panel { display: none; }
+    .install-panel.active { display: block; }
+    .code-wrap { position: relative; margin-bottom: 14px; }
     pre {
       background: #0d1321; border: 1px solid var(--border); border-radius: 12px;
-      padding: 18px; overflow-x: auto; font-size: 0.88rem; color: #e2e8f0;
-      margin-bottom: 18px;
+      padding: 18px 92px 18px 18px; overflow-x: auto; font-size: 0.88rem; color: #e2e8f0;
     }
+    .copy-btn {
+      position: absolute; top: 12px; right: 12px;
+      border: 1px solid var(--border); background: var(--surface-2); color: #e2e8f0;
+      padding: 6px 12px; border-radius: 7px; font-size: 0.78rem; font-weight: 600; cursor: pointer;
+    }
+    .copy-btn:hover { border-color: var(--accent); color: #fff; }
+    .copy-btn.copied { background: rgba(52, 211, 153, 0.2); border-color: var(--emerald); color: #6ee7b7; }
+    .install-note { font-size: 0.88rem; color: var(--muted); }
+
     table { width: 100%; border-collapse: collapse; background: var(--surface); border-radius: 12px; overflow: hidden; }
     th, td { padding: 12px 16px; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
     th { color: #cbd5e1; background: var(--surface-2); }
@@ -215,55 +374,148 @@
     <div class="pill-row">
       <span class="pill">C++20</span>
       <span class="pill">X11 / libxcb</span>
+      <span class="pill">Self-Hosted APT Repo</span>
       <span class="pill">Multi-Monitor RandR</span>
-      <span class="pill">Gemini Live</span>
-      <span class="pill">Antigravity MCP Plugin</span>
+      <span class="pill">Gemini Live &amp; MCP</span>
     </div>
     <h1>A Minimal, Modular X11<br/>Desktop Environment</h1>
     <p class="subtitle">
       Built from the ground up in C++20 on top of <code>libxcb</code>. Featuring Aero Snap,
       true per-monitor wallpapers, switchable Top Bar &amp; Windows 11 Taskbar layouts,
-      32+ wallpapers with auto-rotate fade-in, Gemini Live voice control, and an Antigravity MCP plugin.
+      32+ wallpapers with auto-rotate fade-in, Gemini Live voice control, and boot auto-updates.
     </p>
     <div class="cta-row">
-      <a class="btn btn-primary" href="#install">Install Lunar DE</a>
+      <a class="btn btn-primary" href="#install">Install via APT</a>
       <a class="btn btn-ghost" href="https://github.com/Lunar-Entertainment/Lunar_DE" target="_blank">View on GitHub</a>
     </div>
 
+    <!-- Live Interactive Mini-VM -->
     <div class="preview-shell">
       <div class="preview-controls">
-        <span>Interactive Preview — click any wallpaper below or switch bar layout</span>
+        <span><strong>Live Mini-VM:</strong> Drag windows to top/left/right edges to Aero Snap, resize corners, or type commands (<code>help</code>, <code>neofetch</code>, <code>layout win11</code>).</span>
         <div class="toggle-group">
-          <button class="toggle-btn active" id="btn-top" onclick="setLayout('top')">Top Bar</button>
-          <button class="toggle-btn" id="btn-taskbar" onclick="setLayout('taskbar')">Taskbar (Win 11)</button>
+          <button class="toggle-btn active" id="btn-top" type="button" onclick="setLayout('top')">Top Bar</button>
+          <button class="toggle-btn" id="btn-taskbar" type="button" onclick="setLayout('taskbar')">Taskbar (Win 11)</button>
         </div>
       </div>
-      <div class="desktop-canvas" id="desktop-canvas">
-        <div class="mock-window">
-          <div class="mock-titlebar">
-            <span>lunar@desktop: ~/Lunar_DE</span>
-            <span>&#x2500; &nbsp; &#x25A1; &nbsp; &#x2715;</span>
+
+      <div class="desktop-canvas mode-top" id="desktop-canvas">
+        <!-- Desktop Icons -->
+        <div class="vm-desktop-icons" id="vm-desktop-icons">
+          <button class="vm-dicon" type="button" data-app="terminal" title="Double-click to open Terminal">
+            <span class="vm-dicon-glyph">&gt;_</span>
+            <span>Terminal</span>
+          </button>
+          <button class="vm-dicon" type="button" data-app="appearance" title="Double-click to open Appearance Settings">
+            <span class="vm-dicon-glyph" style="color:#38bdf8">&#9635;</span>
+            <span>Appearance</span>
+          </button>
+        </div>
+
+        <!-- Aero Snap Overlay -->
+        <div class="vm-snap-preview" id="snap-preview"></div>
+
+        <!-- Window 1: Interactive Terminal -->
+        <div class="vm-window focused" id="win-terminal" data-win="terminal" style="left:112px;top:46px;width:540px;height:310px;z-index:12;">
+          <div class="vm-rz n" data-dir="n"></div>
+          <div class="vm-rz s" data-dir="s"></div>
+          <div class="vm-rz e" data-dir="e"></div>
+          <div class="vm-rz w" data-dir="w"></div>
+          <div class="vm-rz nw" data-dir="nw"></div>
+          <div class="vm-rz ne" data-dir="ne"></div>
+          <div class="vm-rz sw" data-dir="sw"></div>
+          <div class="vm-rz se" data-dir="se"></div>
+          <div class="vm-titlebar" data-drag="terminal">
+            <span class="vm-title-text">lunar@desktop: ~/Lunar_DE</span>
+            <div class="vm-win-btns">
+              <button class="vm-win-btn min" type="button" data-action="min" title="Minimize">&#x2500;</button>
+              <button class="vm-win-btn max" type="button" data-action="max" title="Maximize / Restore">&#x25A1;</button>
+              <button class="vm-win-btn close" type="button" data-action="close" title="Close">&#x2715;</button>
+            </div>
           </div>
-          <div class="mock-term">
-            $ ./run_dev.sh -m 2<br/>
-            [lunar] Mounted 2 virtual RandR monitors on :2.<br/>
-            [lunar] Lunar DE is live on DISPLAY=:2!<br/>
-            $ _
+          <div class="vm-term-body" id="vm-term-body">
+            <div id="term-output"></div>
+            <div class="term-input-row">
+              <span class="term-prompt">lunar@de:~$</span>
+              <input id="term-input" type="text" autocomplete="off" spellcheck="false" aria-label="Mini-VM Terminal Input" />
+            </div>
           </div>
         </div>
+
+        <!-- Window 2: Appearance Settings (initially closed) -->
+        <div class="vm-window hidden" id="win-appearance" data-win="appearance" style="left:250px;top:72px;width:430px;height:315px;z-index:11;">
+          <div class="vm-rz n" data-dir="n"></div>
+          <div class="vm-rz s" data-dir="s"></div>
+          <div class="vm-rz e" data-dir="e"></div>
+          <div class="vm-rz w" data-dir="w"></div>
+          <div class="vm-rz nw" data-dir="nw"></div>
+          <div class="vm-rz ne" data-dir="ne"></div>
+          <div class="vm-rz sw" data-dir="sw"></div>
+          <div class="vm-rz se" data-dir="se"></div>
+          <div class="vm-titlebar" data-drag="appearance">
+            <span class="vm-title-text">Zorin Appearance - Lunar DE</span>
+            <div class="vm-win-btns">
+              <button class="vm-win-btn min" type="button" data-action="min" title="Minimize">&#x2500;</button>
+              <button class="vm-win-btn max" type="button" data-action="max" title="Maximize / Restore">&#x25A1;</button>
+              <button class="vm-win-btn close" type="button" data-action="close" title="Close">&#x2715;</button>
+            </div>
+          </div>
+          <div class="vm-app-body">
+            <div>
+              <div class="vm-app-section-title">Panel &amp; Taskbar Layout</div>
+              <div class="vm-layout-cards">
+                <button class="vm-layout-card active" id="vm-card-top" type="button" onclick="setLayout('top')">
+                  <strong>Top Bar</strong>
+                  <span>Classic 28px top panel</span>
+                </button>
+                <button class="vm-layout-card" id="vm-card-taskbar" type="button" onclick="setLayout('taskbar')">
+                  <strong>Taskbar (Win 11)</strong>
+                  <span>Centered 44px bottom bar</span>
+                </button>
+              </div>
+            </div>
+            <div>
+              <div class="vm-app-section-title">Desktop Wallpaper</div>
+              <div class="vm-wp-mini-grid" id="vm-wp-mini-grid"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Mini App Menu Popover -->
+        <div class="vm-app-menu pos-top" id="vm-app-menu">
+          <div class="vm-menu-header">Lunar Applications</div>
+          <button class="vm-menu-item" type="button" onclick="vmLaunchApp('terminal')">
+            <span style="font-family:monospace;font-weight:700;color:#38bdf8">&gt;_</span>
+            <span>Terminal<span class="vm-menu-sub">Interactive Lunar DE shell</span></span>
+          </button>
+          <button class="vm-menu-item" type="button" onclick="vmLaunchApp('appearance')">
+            <span style="color:#818cf8;font-size:1rem">&#9635;</span>
+            <span>Appearance Settings<span class="vm-menu-sub">Switch bar layout &amp; wallpapers</span></span>
+          </button>
+          <button class="vm-menu-item" type="button" onclick="vmCycleWallpaper()">
+            <span style="color:#34d399;font-size:1rem">&#8635;</span>
+            <span>Next Wallpaper<span class="vm-menu-sub">Cycle bundled backgrounds</span></span>
+          </button>
+        </div>
+
+        <!-- Top Bar / Windows 11 Taskbar -->
         <div class="mock-bar top" id="mock-bar">
-          <div class="mock-dots">
-            <div class="ws-pill"></div>
-            <div class="ws-dot"></div>
+          <div class="bar-left" id="bar-left">
+            <button class="launcher-btn" id="vm-launcher-btn" type="button" title="App Menu" onclick="toggleAppMenu(event)">
+              <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+            </button>
+            <div class="ws-pill" title="Workspace 1"></div>
+            <div class="ws-dot" title="Workspace 2"></div>
+            <div class="task-pills" id="task-pills-left"></div>
           </div>
-          <div class="mock-center" id="mock-center">
-            <span id="mock-clock">nov 19 &nbsp; 18:48</span>
+          <div class="bar-center" id="bar-center">
+            <span id="mock-clock">nov 19 &nbsp; 18:55</span>
           </div>
-          <div class="mock-dots">
-            <span style="color:#34d399">&#x25CF;</span>
-            <span>&gt;_</span>
-            <span>Wi-Fi</span>
-            <span>Vol</span>
+          <div class="bar-right">
+            <span style="color:#34d399" title="Gemini Live">&#x25CF;</span>
+            <button class="tray-btn" type="button" title="Open Terminal" onclick="vmLaunchApp('terminal')">&gt;_</button>
+            <button class="tray-btn" type="button" title="Appearance" onclick="vmLaunchApp('appearance')">Prefs</button>
+            <span id="mock-clock-right" style="display:none"></span>
           </div>
         </div>
       </div>
@@ -312,32 +564,62 @@
   <section id="wallpapers" class="container">
     <h2>32 Free Wallpapers + Smooth Auto-Rotate</h2>
     <p class="section-desc">
-      Click any preview below to test it live in the desktop canvas above. Lunar DE includes 32 bundled 1080p wallpapers plus a 33rd <strong>Cycle All (15s)</strong> option with smoothstep cross-fading.
+      Click any preview below to test it live in the Mini-VM above (or run <code>wallpaper 1..8</code> in the VM terminal). Lunar DE includes 32 bundled 1080p wallpapers plus a 33rd <strong>Cycle All (15s)</strong> option with smoothstep cross-fading.
     </p>
-    <div class="wp-grid">
-      <div class="wp-card" onclick="setWp('assets/01_lunar_eclipse.jpg')"><img src="assets/01_lunar_eclipse.jpg" alt="Lunar Eclipse"/><span>01 · Lunar Eclipse</span></div>
-      <div class="wp-card" onclick="setWp('assets/02_nordic_aurora.jpg')"><img src="assets/02_nordic_aurora.jpg" alt="Nordic Aurora"/><span>02 · Nordic Aurora</span></div>
-      <div class="wp-card" onclick="setWp('assets/04_ocean_horizon.jpg')"><img src="assets/04_ocean_horizon.jpg" alt="Ocean Horizon"/><span>04 · Ocean Horizon</span></div>
-      <div class="wp-card" onclick="setWp('assets/05_cyber_synthwave.jpg')"><img src="assets/05_cyber_synthwave.jpg" alt="Cyber Synthwave"/><span>05 · Cyber Synthwave</span></div>
-      <div class="wp-card" onclick="setWp('assets/13_cosmic_nebula.jpg')"><img src="assets/13_cosmic_nebula.jpg" alt="Cosmic Nebula"/><span>13 · Cosmic Nebula</span></div>
-      <div class="wp-card" onclick="setWp('assets/17_midnight_fjord.jpg')"><img src="assets/17_midnight_fjord.jpg" alt="Midnight Fjord"/><span>17 · Midnight Fjord</span></div>
-      <div class="wp-card" onclick="setWp('assets/25_golden_hour_bay.jpg')"><img src="assets/25_golden_hour_bay.jpg" alt="Golden Hour Bay"/><span>25 · Golden Hour Bay</span></div>
-      <div class="wp-card" onclick="setWp('assets/27_cobalt_velocity.jpg')"><img src="assets/27_cobalt_velocity.jpg" alt="Cobalt Velocity"/><span>27 · Cobalt Velocity</span></div>
+    <div class="wp-grid" id="wp-gallery">
+      <div class="wp-card active" data-wp="1" onclick="setWallpaperByIndex(1)"><img src="assets/01_lunar_eclipse.jpg" alt="Lunar Eclipse"/><span>01 · Lunar Eclipse</span></div>
+      <div class="wp-card" data-wp="2" onclick="setWallpaperByIndex(2)"><img src="assets/02_nordic_aurora.jpg" alt="Nordic Aurora"/><span>02 · Nordic Aurora</span></div>
+      <div class="wp-card" data-wp="3" onclick="setWallpaperByIndex(3)"><img src="assets/04_ocean_horizon.jpg" alt="Ocean Horizon"/><span>03 · Ocean Horizon</span></div>
+      <div class="wp-card" data-wp="4" onclick="setWallpaperByIndex(4)"><img src="assets/05_cyber_synthwave.jpg" alt="Cyber Synthwave"/><span>04 · Cyber Synthwave</span></div>
+      <div class="wp-card" data-wp="5" onclick="setWallpaperByIndex(5)"><img src="assets/13_cosmic_nebula.jpg" alt="Cosmic Nebula"/><span>05 · Cosmic Nebula</span></div>
+      <div class="wp-card" data-wp="6" onclick="setWallpaperByIndex(6)"><img src="assets/17_midnight_fjord.jpg" alt="Midnight Fjord"/><span>06 · Midnight Fjord</span></div>
+      <div class="wp-card" data-wp="7" onclick="setWallpaperByIndex(7)"><img src="assets/25_golden_hour_bay.jpg" alt="Golden Hour Bay"/><span>07 · Golden Hour Bay</span></div>
+      <div class="wp-card" data-wp="8" onclick="setWallpaperByIndex(8)"><img src="assets/27_cobalt_velocity.jpg" alt="Cobalt Velocity"/><span>08 · Cobalt Velocity</span></div>
     </div>
   </section>
 
   <section id="install" class="container">
-    <h2>Quick Start &amp; Installation</h2>
-    <p class="section-desc">Test live inside an isolated Xephyr window (including virtual multi-monitor mode) or install as a real X11 login session.</p>
-    <pre><code>git clone https://github.com/Lunar-Entertainment/Lunar_DE.git
+    <h2>Installation</h2>
+    <p class="section-desc">
+      Install directly from Lunar DE's self-hosted GitHub Pages APT repository for automatic updates before login, or build locally from source.
+    </p>
+
+    <div class="install-tabs" role="tablist">
+      <button class="install-tab active" id="tab-apt" type="button" onclick="switchInstallTab('apt')">
+        Easy Install (Zorin OS 18 / Ubuntu 24.04 — Auto-updates on reboot)
+      </button>
+      <button class="install-tab" id="tab-source" type="button" onclick="switchInstallTab('source')">
+        Build from Source / Xephyr Dev
+      </button>
+    </div>
+
+    <div class="install-panel active" id="panel-apt">
+      <div class="code-wrap">
+        <pre><code id="code-apt">curl -fsSL https://lunar-entertainment.github.io/Lunar_DE/install.sh | sudo bash</code></pre>
+        <button class="copy-btn" type="button" onclick="copyCode('code-apt', this)">Copy</button>
+      </div>
+      <p class="install-note">
+        Installs the archive keyring, enables the <code>noble main</code> APT repository, installs <code>lunar-de</code>, and activates <code>lunar-de-autoupdate.service</code> for seamless updates on reboot.
+      </p>
+    </div>
+
+    <div class="install-panel" id="panel-source">
+      <div class="code-wrap">
+        <pre><code id="code-source">git clone https://github.com/Lunar-Entertainment/Lunar_DE.git
 cd Lunar_DE
 
 # Test live in Xephyr (single monitor or 2 virtual RandR monitors)
 ./run_dev.sh
 ./run_dev.sh -m 2
 
-# Install as a real system X11 session (/usr/share/xsessions/lunar.desktop)
+# Install locally from source
 ./install.sh</code></pre>
+        <button class="copy-btn" type="button" onclick="copyCode('code-source', this)">Copy</button>
+      </div>
+      <p class="install-note">
+        Requires <code>cmake</code>, <code>g++</code> (C++20), <code>libxcb*</code>, <code>libxcb-randr0-dev</code>, <code>libjpeg-dev</code>, <code>libpng-dev</code>, <code>libfreetype-dev</code>, and <code>Xephyr</code> for nested testing.
+      </p>
+    </div>
   </section>
 
   <section id="shortcuts" class="container">
@@ -367,23 +649,625 @@ cd Lunar_DE
   </footer>
 
   <script>
-    function setLayout(mode) {
-      const bar = document.getElementById('mock-bar');
-      const center = document.getElementById('mock-center');
-      document.getElementById('btn-top').classList.toggle('active', mode === 'top');
-      document.getElementById('btn-taskbar').classList.toggle('active', mode === 'taskbar');
-      bar.className = 'mock-bar ' + mode;
-      if (mode === 'taskbar') {
-        center.innerHTML =
-          '<div class="start-btn"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>' +
-          '<div class="win-pill">lunar@desktop: ~/Lunar_DE</div>';
+    const WALLPAPERS = [
+      { id: 1, name: 'Lunar Eclipse', src: 'assets/01_lunar_eclipse.jpg' },
+      { id: 2, name: 'Nordic Aurora', src: 'assets/02_nordic_aurora.jpg' },
+      { id: 3, name: 'Ocean Horizon', src: 'assets/04_ocean_horizon.jpg' },
+      { id: 4, name: 'Cyber Synthwave', src: 'assets/05_cyber_synthwave.jpg' },
+      { id: 5, name: 'Cosmic Nebula', src: 'assets/13_cosmic_nebula.jpg' },
+      { id: 6, name: 'Midnight Fjord', src: 'assets/17_midnight_fjord.jpg' },
+      { id: 7, name: 'Golden Hour Bay', src: 'assets/25_golden_hour_bay.jpg' },
+      { id: 8, name: 'Cobalt Velocity', src: 'assets/27_cobalt_velocity.jpg' }
+    ];
+
+    const canvas = document.getElementById('desktop-canvas');
+    const mockBar = document.getElementById('mock-bar');
+    const snapPreview = document.getElementById('snap-preview');
+    const appMenu = document.getElementById('vm-app-menu');
+    const launcherBtn = document.getElementById('vm-launcher-btn');
+    const termOutput = document.getElementById('term-output');
+    const termInput = document.getElementById('term-input');
+    const termBody = document.getElementById('vm-term-body');
+
+    let currentLayout = 'top';
+    let currentWpIndex = 1;
+    let topZ = 15;
+    let activeWinId = 'terminal';
+
+    const windows = {
+      terminal: {
+        id: 'terminal',
+        title: 'Terminal',
+        el: document.getElementById('win-terminal'),
+        closed: false,
+        minimized: false,
+        snapState: null, // null | 'max' | 'left' | 'right'
+        rect: { x: 112, y: 46, w: 540, h: 310 },
+        savedRect: { x: 112, y: 46, w: 540, h: 310 }
+      },
+      appearance: {
+        id: 'appearance',
+        title: 'Appearance Settings',
+        el: document.getElementById('win-appearance'),
+        closed: true,
+        minimized: false,
+        snapState: null,
+        rect: { x: 250, y: 72, w: 430, h: 315 },
+        savedRect: { x: 250, y: 72, w: 430, h: 315 }
+      }
+    };
+
+    function getWorkarea() {
+      const cw = canvas.clientWidth || 880;
+      const ch = canvas.clientHeight || 495;
+      if (currentLayout === 'taskbar') {
+        return { x: 0, y: 0, w: cw, h: Math.max(220, ch - 44), top: 0, bottom: ch - 44 };
+      }
+      return { x: 0, y: 30, w: cw, h: Math.max(220, ch - 30), top: 30, bottom: ch };
+    }
+
+    function clampRect(r, wa) {
+      const minW = 270, minH = 170;
+      const w = Math.max(minW, Math.min(r.w, wa.w));
+      const h = Math.max(minH, Math.min(r.h, wa.h));
+      const x = Math.max(wa.x, Math.min(r.x, wa.x + wa.w - w));
+      const y = Math.max(wa.y, Math.min(r.y, wa.y + wa.h - h));
+      return { x, y, w, h };
+    }
+
+    function applyWindowRect(w) {
+      const wa = getWorkarea();
+      let r = w.rect;
+      w.el.classList.toggle('maximized', w.snapState === 'max');
+      if (w.snapState === 'max') {
+        r = { x: wa.x, y: wa.y, w: wa.w, h: wa.h };
+      } else if (w.snapState === 'left') {
+        r = { x: wa.x + 6, y: wa.y + 6, w: Math.floor(wa.w / 2) - 9, h: wa.h - 12 };
+      } else if (w.snapState === 'right') {
+        const hw = Math.floor(wa.w / 2) - 9;
+        r = { x: wa.x + wa.w - hw - 6, y: wa.y + 6, w: hw, h: wa.h - 12 };
       } else {
-        center.innerHTML = '<span id="mock-clock">nov 19 &nbsp; 18:48</span>';
+        r = clampRect(r, wa);
+      }
+      w.rect = r;
+      w.el.style.left = r.x + 'px';
+      w.el.style.top = r.y + 'px';
+      w.el.style.width = r.w + 'px';
+      w.el.style.height = r.h + 'px';
+    }
+
+    function focusWindow(id) {
+      activeWinId = id;
+      Object.values(windows).forEach((w) => {
+        w.el.classList.toggle('focused', w.id === id);
+      });
+      if (windows[id]) {
+        windows[id].el.style.zIndex = String(++topZ);
+      }
+      renderTaskbarPills();
+    }
+
+    function renderWindow(w) {
+      const visible = !w.closed && !w.minimized;
+      w.el.classList.toggle('hidden', !visible);
+      if (visible) applyWindowRect(w);
+      renderTaskbarPills();
+    }
+
+    function renderTaskbarPills() {
+      const barLeft = document.getElementById('bar-left');
+      const barCenter = document.getElementById('bar-center');
+      const pillsEl = document.getElementById('task-pills-left');
+      if (currentLayout === 'taskbar') {
+        if (pillsEl.parentElement !== barCenter) barCenter.appendChild(pillsEl);
+      } else {
+        if (pillsEl.parentElement !== barLeft) barLeft.appendChild(pillsEl);
+      }
+      pillsEl.innerHTML = '';
+      Object.values(windows).forEach((w) => {
+        if (w.closed) return;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'task-pill' +
+          (!w.minimized && activeWinId === w.id ? ' active' : '') +
+          (w.minimized ? ' minimized' : '');
+        btn.textContent = w.title;
+        btn.onclick = () => {
+          closeAppMenu();
+          if (w.minimized) {
+            w.minimized = false;
+            renderWindow(w);
+            focusWindow(w.id);
+          } else if (activeWinId === w.id) {
+            w.minimized = true;
+            renderWindow(w);
+          } else {
+            focusWindow(w.id);
+          }
+        };
+        pillsEl.appendChild(btn);
+      });
+    }
+
+    function snapTargetRect(zone) {
+      const wa = getWorkarea();
+      if (zone === 'top') return { x: wa.x + 6, y: wa.y + 6, w: wa.w - 12, h: wa.h - 12 };
+      if (zone === 'left') return { x: wa.x + 6, y: wa.y + 6, w: Math.floor(wa.w / 2) - 9, h: wa.h - 12 };
+      if (zone === 'right') {
+        const hw = Math.floor(wa.w / 2) - 9;
+        return { x: wa.x + wa.w - hw - 6, y: wa.y + 6, w: hw, h: wa.h - 12 };
+      }
+      return null;
+    }
+
+    function showSnapPreview(zone) {
+      const r = zone ? snapTargetRect(zone) : null;
+      if (!r) {
+        snapPreview.classList.remove('visible');
+        return;
+      }
+      snapPreview.style.left = r.x + 'px';
+      snapPreview.style.top = r.y + 'px';
+      snapPreview.style.width = r.w + 'px';
+      snapPreview.style.height = r.h + 'px';
+      snapPreview.classList.add('visible');
+    }
+
+    function toggleMaximize(id) {
+      const w = windows[id];
+      if (!w) return;
+      if (w.snapState === 'max') {
+        w.snapState = null;
+        w.rect = { ...w.savedRect };
+      } else {
+        if (!w.snapState) w.savedRect = { ...w.rect };
+        w.snapState = 'max';
+      }
+      renderWindow(w);
+      focusWindow(id);
+    }
+
+    function vmLaunchApp(id) {
+      closeAppMenu();
+      const w = windows[id];
+      if (!w) return;
+      w.closed = false;
+      w.minimized = false;
+      renderWindow(w);
+      focusWindow(id);
+      if (id === 'terminal') termInput.focus();
+    }
+
+    function closeAppMenu() {
+      appMenu.classList.remove('open');
+      launcherBtn.classList.remove('active');
+    }
+
+    function toggleAppMenu(e) {
+      if (e) e.stopPropagation();
+      const open = appMenu.classList.toggle('open');
+      launcherBtn.classList.toggle('active', open);
+    }
+
+    function setLayout(mode) {
+      currentLayout = mode === 'taskbar' ? 'taskbar' : 'top';
+      document.getElementById('btn-top').classList.toggle('active', currentLayout === 'top');
+      document.getElementById('btn-taskbar').classList.toggle('active', currentLayout === 'taskbar');
+      document.getElementById('vm-card-top').classList.toggle('active', currentLayout === 'top');
+      document.getElementById('vm-card-taskbar').classList.toggle('active', currentLayout === 'taskbar');
+
+      canvas.classList.toggle('mode-taskbar', currentLayout === 'taskbar');
+      canvas.classList.toggle('mode-top', currentLayout === 'top');
+      mockBar.className = 'mock-bar ' + currentLayout;
+
+      appMenu.classList.toggle('pos-taskbar', currentLayout === 'taskbar');
+      appMenu.classList.toggle('pos-top', currentLayout === 'top');
+
+      const barLeft = document.getElementById('bar-left');
+      const barCenter = document.getElementById('bar-center');
+      const barRight = document.querySelector('.bar-right');
+      const clockMain = document.getElementById('mock-clock');
+      const clockRight = document.getElementById('mock-clock-right');
+
+      if (currentLayout === 'taskbar') {
+        if (launcherBtn.parentElement !== barCenter) barCenter.prepend(launcherBtn);
+        clockMain.style.display = 'none';
+        clockRight.style.display = 'inline';
+        clockRight.textContent = clockMain.textContent;
+      } else {
+        if (launcherBtn.parentElement !== barLeft) barLeft.prepend(launcherBtn);
+        clockMain.style.display = 'inline';
+        clockRight.style.display = 'none';
+      }
+
+      Object.values(windows).forEach((w) => {
+        if (!w.closed && !w.minimized) applyWindowRect(w);
+      });
+      renderTaskbarPills();
+    }
+
+    function setWallpaperByIndex(idx) {
+      const wp = WALLPAPERS.find((item) => item.id === Number(idx)) || WALLPAPERS[0];
+      currentWpIndex = wp.id;
+      canvas.style.backgroundImage = "url('" + wp.src + "')";
+      document.querySelectorAll('#wp-gallery .wp-card').forEach((card) => {
+        card.classList.toggle('active', Number(card.dataset.wp) === wp.id);
+      });
+      document.querySelectorAll('#vm-wp-mini-grid .vm-wp-mini').forEach((btn) => {
+        btn.classList.toggle('active', Number(btn.dataset.wp) === wp.id);
+      });
+      return wp;
+    }
+
+    function vmCycleWallpaper() {
+      const next = (currentWpIndex % WALLPAPERS.length) + 1;
+      setWallpaperByIndex(next);
+    }
+
+    function initAppearanceGrid() {
+      const grid = document.getElementById('vm-wp-mini-grid');
+      WALLPAPERS.forEach((wp) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'vm-wp-mini' + (wp.id === 1 ? ' active' : '');
+        btn.dataset.wp = String(wp.id);
+        btn.title = wp.name;
+        btn.onclick = () => setWallpaperByIndex(wp.id);
+        const img = document.createElement('img');
+        img.src = wp.src;
+        img.alt = wp.name;
+        btn.appendChild(img);
+        grid.appendChild(btn);
+      });
+    }
+
+    // Drag, Resize, Snap, Double-Click & Controls
+    function setupWindowInteractions() {
+      Object.values(windows).forEach((w) => {
+        w.el.addEventListener('pointerdown', () => focusWindow(w.id));
+
+        const titlebar = w.el.querySelector('.vm-titlebar');
+        titlebar.addEventListener('dblclick', (e) => {
+          if (e.target.closest('.vm-win-btn')) return;
+          toggleMaximize(w.id);
+        });
+
+        w.el.querySelectorAll('.vm-win-btn').forEach((btn) => {
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const act = btn.dataset.action;
+            if (act === 'min') {
+              w.minimized = true;
+              renderWindow(w);
+            } else if (act === 'max') {
+              toggleMaximize(w.id);
+            } else if (act === 'close') {
+              w.closed = true;
+              renderWindow(w);
+            }
+          });
+        });
+
+        titlebar.addEventListener('pointerdown', (e) => {
+          if (e.button !== 0 || e.target.closest('.vm-win-btn')) return;
+          e.preventDefault();
+          focusWindow(w.id);
+          closeAppMenu();
+
+          const startX = e.clientX;
+          const startY = e.clientY;
+          let originRect = { ...w.rect };
+          let wasMax = (w.snapState === 'max');
+          let unmaxed = false;
+          let snapZone = null;
+
+          titlebar.setPointerCapture(e.pointerId);
+
+          const onMove = (mv) => {
+            const dx = mv.clientX - startX;
+            const dy = mv.clientY - startY;
+            const cRect = canvas.getBoundingClientRect();
+            const relX = mv.clientX - cRect.left;
+            const relY = mv.clientY - cRect.top;
+            const wa = getWorkarea();
+
+            if (wasMax && !unmaxed) {
+              if (Math.hypot(dx, dy) < 5) return;
+              unmaxed = true;
+              w.snapState = null;
+              const rw = w.savedRect.w || 460;
+              const rh = w.savedRect.h || 280;
+              originRect = {
+                x: Math.max(wa.x, Math.min(relX - rw / 2, wa.x + wa.w - rw)),
+                y: Math.max(wa.y, relY - 14),
+                w: rw,
+                h: rh
+              };
+            } else if (!wasMax && w.snapState) {
+              if (Math.hypot(dx, dy) >= 5) w.snapState = null;
+            }
+
+            if (!wasMax || unmaxed) {
+              w.el.classList.remove('maximized');
+              const nx = Math.max(-originRect.w + 80, Math.min(originRect.x + dx, wa.w - 80));
+              const ny = Math.max(wa.y, Math.min(originRect.y + dy, wa.bottom - 30));
+              w.rect = { x: nx, y: ny, w: originRect.w, h: originRect.h };
+              w.el.style.left = nx + 'px';
+              w.el.style.top = ny + 'px';
+              w.el.style.width = originRect.w + 'px';
+              w.el.style.height = originRect.h + 'px';
+
+              if (relY <= wa.top + 16) snapZone = 'top';
+              else if (relX <= 16) snapZone = 'left';
+              else if (relX >= wa.w - 16) snapZone = 'right';
+              else snapZone = null;
+              showSnapPreview(snapZone);
+            }
+          };
+
+          const onUp = () => {
+            titlebar.removeEventListener('pointermove', onMove);
+            titlebar.removeEventListener('pointerup', onUp);
+            titlebar.removeEventListener('pointercancel', onUp);
+            showSnapPreview(null);
+            if (snapZone) {
+              if (!w.snapState) w.savedRect = { ...w.rect };
+              w.snapState = snapZone === 'top' ? 'max' : snapZone;
+              applyWindowRect(w);
+            } else if (!w.snapState) {
+              w.savedRect = { ...w.rect };
+            }
+          };
+
+          titlebar.addEventListener('pointermove', onMove);
+          titlebar.addEventListener('pointerup', onUp);
+          titlebar.addEventListener('pointercancel', onUp);
+        });
+
+        // 8-direction resize handles
+        w.el.querySelectorAll('.vm-rz').forEach((handle) => {
+          handle.addEventListener('pointerdown', (e) => {
+            if (e.button !== 0 || w.snapState === 'max') return;
+            e.preventDefault();
+            e.stopPropagation();
+            focusWindow(w.id);
+            const dir = handle.dataset.dir;
+            const startX = e.clientX;
+            const startY = e.clientY;
+            const startR = { ...w.rect };
+            w.snapState = null;
+
+            handle.setPointerCapture(e.pointerId);
+
+            const onMove = (mv) => {
+              const dx = mv.clientX - startX;
+              const dy = mv.clientY - startY;
+              const wa = getWorkarea();
+              const minW = 270, minH = 170;
+
+              let left = startR.x;
+              let top = startR.y;
+              let right = startR.x + startR.w;
+              let bottom = startR.y + startR.h;
+
+              if (dir.includes('e')) right = Math.min(wa.x + wa.w, Math.max(left + minW, startR.x + startR.w + dx));
+              if (dir.includes('s')) bottom = Math.min(wa.bottom, Math.max(top + minH, startR.y + startR.h + dy));
+              if (dir.includes('w')) left = Math.max(wa.x, Math.min(right - minW, startR.x + dx));
+              if (dir.includes('n')) top = Math.max(wa.y, Math.min(bottom - minH, startR.y + dy));
+
+              w.rect = { x: left, y: top, w: right - left, h: bottom - top };
+              w.savedRect = { ...w.rect };
+              w.el.style.left = w.rect.x + 'px';
+              w.el.style.top = w.rect.y + 'px';
+              w.el.style.width = w.rect.w + 'px';
+              w.el.style.height = w.rect.h + 'px';
+            };
+
+            const onUp = () => {
+              handle.removeEventListener('pointermove', onMove);
+              handle.removeEventListener('pointerup', onUp);
+              handle.removeEventListener('pointercancel', onUp);
+            };
+
+            handle.addEventListener('pointermove', onMove);
+            handle.addEventListener('pointerup', onUp);
+            handle.addEventListener('pointercancel', onUp);
+          });
+        });
+      });
+
+      // Desktop icon selection & double-click launch
+      document.querySelectorAll('.vm-dicon').forEach((icon) => {
+        icon.addEventListener('click', (e) => {
+          e.stopPropagation();
+          closeAppMenu();
+          document.querySelectorAll('.vm-dicon').forEach((b) => b.classList.remove('selected'));
+          icon.classList.add('selected');
+        });
+        icon.addEventListener('dblclick', (e) => {
+          e.stopPropagation();
+          vmLaunchApp(icon.dataset.app);
+        });
+      });
+
+      canvas.addEventListener('click', (e) => {
+        if (!e.target.closest('.vm-app-menu') && !e.target.closest('.launcher-btn')) {
+          closeAppMenu();
+        }
+        if (!e.target.closest('.vm-dicon')) {
+          document.querySelectorAll('.vm-dicon').forEach((b) => b.classList.remove('selected'));
+        }
+      });
+    }
+
+    // Interactive Terminal
+    const cmdHistory = [];
+    let historyIdx = -1;
+
+    function printTerm(text, cls) {
+      const div = document.createElement('div');
+      div.className = 'term-line' + (cls ? ' ' + cls : '');
+      div.textContent = text;
+      termOutput.appendChild(div);
+      termBody.scrollTop = termBody.scrollHeight;
+    }
+
+    function runTermCommand(raw) {
+      const cmd = raw.trim();
+      printTerm('lunar@de:~$ ' + cmd, 'term-green');
+      if (!cmd) return;
+
+      cmdHistory.unshift(cmd);
+      historyIdx = -1;
+      const lower = cmd.toLowerCase();
+      const parts = lower.split(/\s+/);
+
+      if (lower === 'help') {
+        printTerm('Available commands:', 'term-accent');
+        printTerm('  help             Show this command list');
+        printTerm('  neofetch         Show Lunar DE specs');
+        printTerm('  ls               List Lunar_DE workspace files');
+        printTerm('  layout top       Switch panel to Top Bar');
+        printTerm('  layout win11     Switch panel to Windows 11 Taskbar');
+        printTerm('  wallpaper <1-8>  Switch desktop background (1..8)');
+        printTerm('  appearance       Open Appearance Settings window');
+        printTerm('  ./run_dev.sh -m 2 Simulate dual virtual RandR monitor launch');
+        printTerm('  clear            Clear terminal output');
+      } else if (lower === 'clear') {
+        termOutput.innerHTML = '';
+      } else if (lower === 'ls') {
+        printTerm('CMakeLists.txt  README.md  assets/  config/  docs/  install.sh  run_dev.sh  scripts/  src/  antigravity-plugin/');
+      } else if (lower === 'neofetch') {
+        const wp = WALLPAPERS.find((w) => w.id === currentWpIndex) || WALLPAPERS[0];
+        const art = [
+          '      _..._        lunar@desktop',
+          '    .::   ::.      -------------',
+          '   ::       ::     DE: Lunar DE (C++20 / libxcb)',
+          '   ::              WM: lunar-wm (Aero Snap + RandR)',
+          '    `::   ::\'      Bar: ' + (currentLayout === 'taskbar' ? 'Windows 11 Taskbar (44px)' : 'Top Bar (28px)'),
+          '      `---\'\'       Wallpaper: ' + wp.name + ' (' + wp.id + '/8)',
+          '                   Viewport: ' + Math.round(canvas.clientWidth) + 'x' + Math.round(canvas.clientHeight)
+        ];
+        art.forEach((ln) => printTerm(ln, 'term-accent'));
+      } else if (lower === 'layout top' || lower === 'layout topbar') {
+        setLayout('top');
+        printTerm('[lunar] Switched panel layout -> Top Bar (28px).', 'term-accent');
+      } else if (lower === 'layout win11' || lower === 'layout taskbar') {
+        setLayout('taskbar');
+        printTerm('[lunar] Switched panel layout -> Windows 11 Taskbar (44px).', 'term-accent');
+      } else if (parts[0] === 'wallpaper') {
+        const num = parseInt(parts[1], 10);
+        if (isNaN(num) || num < 1 || num > 8) {
+          printTerm('Usage: wallpaper <1-8>', 'term-muted');
+        } else {
+          const wp = setWallpaperByIndex(num);
+          printTerm('[lunar] Wallpaper set -> ' + wp.id + ' (' + wp.name + ')', 'term-accent');
+        }
+      } else if (lower === 'appearance') {
+        vmLaunchApp('appearance');
+        printTerm('[lunar] Opened Appearance Settings.', 'term-accent');
+      } else if (lower === './run_dev.sh -m 2' || lower === './run_dev.sh') {
+        printTerm('[lunar] Building Release binaries lunar-wm & lunar-panel...', 'term-muted');
+        if (lower.includes('-m 2')) {
+          printTerm('[lunar] Starting Xephyr on :2 (1920x640, 2 virtual monitors)...', 'term-muted');
+          printTerm('[lunar] Mounted VMon-0 (960x640+0+0) & VMon-1 (960x640+960+0).', 'term-accent');
+        } else {
+          printTerm('[lunar] Starting Xephyr on :2 (1280x720, resizeable)...', 'term-muted');
+        }
+        printTerm('[lunar] Lunar DE is live on DISPLAY=:2!', 'term-green');
+      } else {
+        printTerm("Command not found: '" + cmd + "'. Type 'help' for commands.", 'term-muted');
       }
     }
-    function setWp(src) {
-      document.getElementById('desktop-canvas').style.backgroundImage = "url('" + src + "')";
+
+    termBody.addEventListener('click', () => termInput.focus());
+    termInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        const val = termInput.value;
+        termInput.value = '';
+        runTermCommand(val);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (historyIdx + 1 < cmdHistory.length) {
+          historyIdx++;
+          termInput.value = cmdHistory[historyIdx];
+        }
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (historyIdx > 0) {
+          historyIdx--;
+          termInput.value = cmdHistory[historyIdx];
+        } else {
+          historyIdx = -1;
+          termInput.value = '';
+        }
+      }
+    });
+
+    // Install Tabs & Clipboard Copy
+    function switchInstallTab(tab) {
+      const isApt = tab === 'apt';
+      document.getElementById('tab-apt').classList.toggle('active', isApt);
+      document.getElementById('tab-source').classList.toggle('active', !isApt);
+      document.getElementById('panel-apt').classList.toggle('active', isApt);
+      document.getElementById('panel-source').classList.toggle('active', !isApt);
     }
+
+    function copyCode(codeId, btn) {
+      const text = document.getElementById(codeId).textContent.trim();
+      const done = () => {
+        btn.textContent = 'Copied!';
+        btn.classList.add('copied');
+        setTimeout(() => {
+          btn.textContent = 'Copy';
+          btn.classList.remove('copied');
+        }, 1800);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done).catch(() => fallbackCopy(text, done));
+      } else {
+        fallbackCopy(text, done);
+      }
+    }
+
+    function fallbackCopy(text, cb) {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); } catch (e) {}
+      document.body.removeChild(ta);
+      cb();
+    }
+
+    function updateClock() {
+      const now = new Date();
+      const mon = now.toLocaleString('en-US', { month: 'short' }).toLowerCase();
+      const day = now.getDate();
+      const hh = String(now.getHours()).padStart(2, '0');
+      const mm = String(now.getMinutes()).padStart(2, '0');
+      const txt = mon + ' ' + day + '  ' + hh + ':' + mm;
+      document.getElementById('mock-clock').textContent = txt;
+      document.getElementById('mock-clock-right').textContent = txt;
+    }
+
+    // Boot VM
+    initAppearanceGrid();
+    setupWindowInteractions();
+    renderWindow(windows.terminal);
+    focusWindow('terminal');
+    updateClock();
+    setInterval(updateClock, 15000);
+    window.addEventListener('resize', () => {
+      Object.values(windows).forEach((w) => {
+        if (!w.closed && !w.minimized) applyWindowRect(w);
+      });
+    });
+
+    printTerm('Lunar DE Interactive Shell v1.0', 'term-accent');
+    printTerm("Try 'help', 'neofetch', 'layout win11', or 'wallpaper 4'.", 'term-muted');
   </script>
 </body>
 </html>

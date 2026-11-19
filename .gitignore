@@ -1,4 +1,6 @@
 build/
+/dist/
+/*.deb
 scripts/__pycache__/
 *.pyc
 *.log

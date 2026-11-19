@@ -126,6 +126,9 @@ fs::path find_bundled_wallpapers_dir() {
     if (fs::exists("/usr/local/share/lunar-de/assets/wallpapers", ec)) {
         return fs::path("/usr/local/share/lunar-de/assets/wallpapers");
     }
+    if (fs::exists("/usr/share/lunar-de/assets/wallpapers", ec)) {
+        return fs::path("/usr/share/lunar-de/assets/wallpapers");
+    }
     if (fs::exists("/home/lunar/Lunar_DE/assets/wallpapers", ec)) {
         return fs::path("/home/lunar/Lunar_DE/assets/wallpapers");
     }

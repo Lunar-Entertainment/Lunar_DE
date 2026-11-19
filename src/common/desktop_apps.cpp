@@ -362,6 +362,8 @@ void AppRegistry::load() {
         const char* helper = nullptr;
         if (fs::exists("/usr/local/share/lunar-de/scripts/render_icons.py", ec)) {
             helper = "python3 /usr/local/share/lunar-de/scripts/render_icons.py 2>/dev/null";
+        } else if (fs::exists("/usr/share/lunar-de/scripts/render_icons.py", ec)) {
+            helper = "python3 /usr/share/lunar-de/scripts/render_icons.py 2>/dev/null";
         } else if (fs::exists("/home/lunar/Lunar_DE/scripts/render_icons.py", ec)) {
             helper = "python3 /home/lunar/Lunar_DE/scripts/render_icons.py 2>/dev/null";
         }

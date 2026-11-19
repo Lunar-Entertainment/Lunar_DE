@@ -14,7 +14,13 @@ export GIO_USE_VFS=local
 export NO_AT_BRIDGE=1
 export GTK_A11Y=none
 
-SHARE_DIR="/usr/local/share/lunar-de"
+if [[ -d "/usr/local/share/lunar-de" ]]; then
+    SHARE_DIR="/usr/local/share/lunar-de"
+else
+    SHARE_DIR="/usr/share/lunar-de"
+fi
+LUNAR_PANEL="$(command -v lunar-panel || echo /usr/bin/lunar-panel)"
+LUNAR_WM="$(command -v lunar-wm || echo /usr/bin/lunar-wm)"
 PID_FILE="/tmp/lunar-de-pids.txt"
 : > "${PID_FILE}"
 
@@ -51,7 +57,7 @@ if command -v python3 >/dev/null 2>&1 && [[ -f "${SHARE_DIR}/scripts/lunar_live.
     echo "$!" >> "${PID_FILE}"
 fi
 
-/usr/local/bin/lunar-panel </dev/null >/tmp/lunar-panel.log 2>&1 &
+"${LUNAR_PANEL}" </dev/null >/tmp/lunar-panel.log 2>&1 &
 echo "$!" >> "${PID_FILE}"
 
-exec /usr/local/bin/lunar-wm >/tmp/lunar-wm.log 2>&1
+exec "${LUNAR_WM}" >/tmp/lunar-wm.log 2>&1
