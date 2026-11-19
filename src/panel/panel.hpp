@@ -30,7 +30,14 @@ public:
 
 private:
     enum class PopupKind { None, AppMenu, QuickSettings, ContextMenu, WallpaperPicker, GeminiLive, Appearance, RunDialog };
-    enum class BarLayout { TopBar, Taskbar };
+    enum class BarLayout { TopBar, Taskbar, TaskbarTop };
+
+    bool is_taskbar_style() const noexcept {
+        return bar_layout_ == BarLayout::Taskbar || bar_layout_ == BarLayout::TaskbarTop;
+    }
+    bool is_bottom_bar() const noexcept {
+        return bar_layout_ == BarLayout::Taskbar;
+    }
 
     struct LiveStatus {
         std::string status = "listening"; // needs_key, listening, connecting, live, speaking, paused, error

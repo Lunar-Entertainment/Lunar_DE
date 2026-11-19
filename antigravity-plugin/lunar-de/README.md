@@ -10,5 +10,5 @@ Gives Gemini models in Antigravity direct, safe MCP tools to inspect and control
 - `take_screenshot` — Capture the desktop screen to PNG
 - `set_volume` — Set volume percentage or toggle mute
 - `set_wallpaper` — Switch wallpapers or enable `CYCLE_ALL`
-- `set_bar_layout` — Toggle between `top` (Top Bar) and `taskbar` (Win 11 Taskbar)
+- `set_bar_layout` — Switch between `top` (Top Bar), `taskbar` (Bottom Taskbar), and `taskbar-top` (Top Taskbar)
 - `send_input` — Send keystrokes or clicks via `xdotool`

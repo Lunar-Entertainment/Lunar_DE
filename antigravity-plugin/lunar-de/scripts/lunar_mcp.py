@@ -101,11 +101,11 @@ TOOLS: list[dict[str, Any]] = [
     },
     {
         "name": "set_bar_layout",
-        "description": "Switch Lunar DE bar layout between 'top' (Top Bar) and 'taskbar' (Windows 11 bottom taskbar).",
+        "description": "Switch Lunar DE bar layout between 'top' (compact Top Bar), 'taskbar' (centered bottom taskbar), and 'taskbar-top' (centered top taskbar).",
         "inputSchema": {
             "type": "object",
             "properties": {
-                "layout": {"type": "string", "enum": ["top", "taskbar"]}
+                "layout": {"type": "string", "enum": ["top", "taskbar", "taskbar-top"]}
             },
             "required": ["layout"],
         },
@@ -307,8 +307,8 @@ def handle_tool(name: str, args: dict[str, Any]) -> dict[str, Any]:
 
     if name == "set_bar_layout":
         layout = str(args.get("layout", "top")).strip().lower()
-        if layout not in ("top", "taskbar"):
-            return {"ok": False, "error": "layout must be 'top' or 'taskbar'"}
+        if layout not in ("top", "taskbar", "taskbar-top"):
+            return {"ok": False, "error": "layout must be 'top', 'taskbar', or 'taskbar-top'"}
         (cfg_dir() / "panel_layout").write_text(layout + "\n", encoding="utf-8")
         return {"ok": True, "layout": layout, "note": "Saved to panel_layout."}
 

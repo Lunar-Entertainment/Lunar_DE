@@ -262,7 +262,7 @@ void Panel::rebuild_background_strip() {
     if (!wp_path.empty()) {
         ImageBuffer full_wp = load_image_cover_scaled(wp_path, width_, screen_height_);
         if (full_wp.pixels.size() >= static_cast<size_t>(width_) * screen_height_) {
-            const int src_y = (bar_layout_ == BarLayout::Taskbar)
+            const int src_y = is_bottom_bar()
                                   ? std::max(0, static_cast<int>(screen_height_) - height_)
                                   : 0;
             std::copy_n(full_wp.pixels.begin() + static_cast<size_t>(src_y) * width_,
@@ -337,7 +337,7 @@ void Panel::publish_dock_properties() {
     xcb_ewmh_set_wm_window_type(&ewmh_, win_, 1, &dock_type);
 
     xcb_ewmh_wm_strut_partial_t strut{};
-    if (bar_layout_ == BarLayout::Taskbar) {
+    if (is_bottom_bar()) {
         const int mon_bottom = primary_mon_rect_.y + primary_mon_rect_.height;
         const int extra_bottom = std::max(0, static_cast<int>(screen_->height_in_pixels) - mon_bottom);
         strut.bottom = static_cast<uint32_t>(extra_bottom + height_);
@@ -505,7 +505,7 @@ void Panel::on_property_notify(const xcb_property_notify_event_t* ev) {
 void Panel::on_configure_notify(const xcb_configure_notify_event_t* ev) {
     if (ev->window == screen_->root && ev->width > 0 && ev->height > 0) {
         const MonitorInfo pmon = primary_monitor(query_monitors(conn_, screen_));
-        const int16_t next_y = (bar_layout_ == BarLayout::Taskbar)
+        const int16_t next_y = is_bottom_bar()
                                    ? static_cast<int16_t>(pmon.rect.y + pmon.rect.height - height_)
                                    : pmon.rect.y;
         if (pmon.rect.x != panel_x_ || next_y != panel_y_ ||
@@ -585,7 +585,10 @@ void Panel::on_button_press(const xcb_button_press_event_t* ev) {
                            ? PopupKind::None
                            : PopupKind::QuickSettings);
         } else {
-            open_popup(PopupKind::ContextMenu, ev->root_x, static_cast<int16_t>(height_ + 4));
+            const int16_t ctx_y = is_bottom_bar()
+                                      ? static_cast<int16_t>(panel_y_ - kCtxH - 4)
+                                      : static_cast<int16_t>(panel_y_ + height_ + 4);
+            open_popup(PopupKind::ContextMenu, ev->root_x, ctx_y);
         }
         return;
     }
@@ -823,14 +826,14 @@ void Panel::open_popup(PopupKind kind, int16_t anchor_x, int16_t anchor_y) {
     popup_hover_y_ = -1;
     dragging_volume_ = false;
 
-    const bool is_bottom = (bar_layout_ == BarLayout::Taskbar);
+    const bool is_bottom = is_bottom_bar();
     int16_t px = static_cast<int16_t>(panel_x_ + 10);
     int16_t py = static_cast<int16_t>(panel_y_ + height_ + 6);
 
     if (kind == PopupKind::AppMenu) {
         popup_w_ = std::min<uint16_t>(kAppMenuW, static_cast<uint16_t>(std::max<int>(320, width_ - 20)));
         popup_h_ = std::min<uint16_t>(kAppMenuH, static_cast<uint16_t>(std::max<int>(240, screen_height_ - height_ - 20)));
-        px = is_bottom
+        px = is_taskbar_style()
                  ? static_cast<int16_t>(panel_x_ + std::max<int>(10, (static_cast<int>(width_) - popup_w_) / 2))
                  : static_cast<int16_t>(panel_x_ + 10);
         py = is_bottom
@@ -878,8 +881,8 @@ void Panel::open_popup(PopupKind kind, int16_t anchor_x, int16_t anchor_y) {
                  : static_cast<int16_t>(panel_y_ + height_ + 8);
         editing_api_key_ = false;
     } else if (kind == PopupKind::Appearance) {
-        popup_w_ = 464;
-        popup_h_ = 264;
+        popup_w_ = std::min<uint16_t>(648, static_cast<uint16_t>(std::max<int>(360, width_ - 20)));
+        popup_h_ = 268;
         px = static_cast<int16_t>(panel_x_ + std::max<int>(10, (static_cast<int>(width_) - popup_w_) / 2));
         py = is_bottom
                  ? static_cast<int16_t>(panel_y_ - popup_h_ - 8)
@@ -1485,7 +1488,10 @@ void Panel::draw_quick_settings() {
     draw_tile(kTileX2, kTileY2, kTileW, kTileH, false,
               "Terminal", "Open shell");
     draw_tile(kTileX1, kTileY3, kTileW, kTileH, false,
-              "Appearance", bar_layout_ == BarLayout::Taskbar ? "Taskbar (Win 11)" : "Top Bar");
+              "Appearance",
+              bar_layout_ == BarLayout::Taskbar
+                  ? "Taskbar (Bottom)"
+                  : (bar_layout_ == BarLayout::TaskbarTop ? "Taskbar (Top)" : "Top Bar"));
     draw_tile(kTileX2, kTileY3, kTileW, kTileH, false,
               "Exit Lunar DE", "Quit session");
 }
@@ -2052,10 +2058,11 @@ void Panel::redraw() {
     const std::string clock_str = last_clock_.empty() ? format_clock() : last_clock_;
     pinned_hit_items_.clear();
 
-    if (bar_layout_ == BarLayout::Taskbar) {
-        // Windows 11 style bottom taskbar:
+    if (is_taskbar_style()) {
+        // Centered taskbar (bottom or top):
         // Left: Workspace pill, Center: Start + Pinned Apps + Running Apps, Right: Tray + Clock
-        fill_rect_alpha(canvas_, 0, 0, width_, 1, 0xffffff, 0.14f);
+        fill_rect_alpha(canvas_, 0, is_bottom_bar() ? 0 : static_cast<int>(height_) - 1,
+                        width_, 1, 0xffffff, 0.14f);
 
         // 1. Left Workspace indicator pill
         float ws_x = 14.0f;
@@ -2497,18 +2504,27 @@ void Panel::draw_gemini_live() {
     f_bold.draw_text(popup_canvas_, 294, 265, "Save", 11, 0xf8fafc);
 }
 
+namespace {
+
+std::filesystem::path lunar_de_config_dir() {
+    const char* xdg = std::getenv("XDG_CONFIG_HOME");
+    if (xdg && *xdg) {
+        return std::filesystem::path(xdg) / "lunar-de";
+    }
+    const char* home = std::getenv("HOME");
+    if (home && *home) {
+        return std::filesystem::path(home) / ".config" / "lunar-de";
+    }
+    return {};
+}
+
+} // namespace
+
 void Panel::load_bar_layout() {
     bar_layout_ = BarLayout::TopBar;
-    const char* xdg = std::getenv("XDG_CONFIG_HOME");
-    const char* home = std::getenv("HOME");
-    std::filesystem::path file;
-    if (xdg && *xdg) {
-        file = std::filesystem::path(xdg) / "lunar-de" / "panel_layout";
-    } else if (home && *home) {
-        file = std::filesystem::path(home) / ".config" / "lunar-de" / "panel_layout";
-    }
-    if (!file.empty()) {
-        std::ifstream in(file);
+    const std::filesystem::path dir = lunar_de_config_dir();
+    if (!dir.empty()) {
+        std::ifstream in(dir / "panel_layout");
         std::string val;
         if (std::getline(in, val)) {
             while (!val.empty() && (val.back() == '\n' || val.back() == '\r' || val.back() == ' ')) {
@@ -2516,11 +2532,13 @@ void Panel::load_bar_layout() {
             }
             if (val == "taskbar") {
                 bar_layout_ = BarLayout::Taskbar;
+            } else if (val == "taskbar-top") {
+                bar_layout_ = BarLayout::TaskbarTop;
             }
         }
     }
-    height_ = (bar_layout_ == BarLayout::Taskbar) ? 44 : theme::kPanelHeight;
-    panel_y_ = (bar_layout_ == BarLayout::Taskbar)
+    height_ = is_taskbar_style() ? 44 : theme::kPanelHeight;
+    panel_y_ = is_bottom_bar()
                    ? static_cast<int16_t>(primary_mon_rect_.y + primary_mon_rect_.height - height_)
                    : primary_mon_rect_.y;
 }
@@ -2529,25 +2547,21 @@ void Panel::set_bar_layout(BarLayout layout) {
     if (bar_layout_ == layout) return;
     bar_layout_ = layout;
 
-    const char* xdg = std::getenv("XDG_CONFIG_HOME");
-    const char* home = std::getenv("HOME");
-    std::filesystem::path dir;
-    if (xdg && *xdg) {
-        dir = std::filesystem::path(xdg) / "lunar-de";
-    } else if (home && *home) {
-        dir = std::filesystem::path(home) / ".config" / "lunar-de";
-    }
+    const std::filesystem::path dir = lunar_de_config_dir();
     if (!dir.empty()) {
         std::error_code ec;
         std::filesystem::create_directories(dir, ec);
         std::ofstream out(dir / "panel_layout", std::ios::trunc);
         if (out.is_open()) {
-            out << (layout == BarLayout::Taskbar ? "taskbar" : "top") << '\n';
+            const char* name = (layout == BarLayout::Taskbar)
+                                   ? "taskbar"
+                                   : (layout == BarLayout::TaskbarTop ? "taskbar-top" : "top");
+            out << name << '\n';
         }
     }
 
-    height_ = (bar_layout_ == BarLayout::Taskbar) ? 44 : theme::kPanelHeight;
-    panel_y_ = (bar_layout_ == BarLayout::Taskbar)
+    height_ = is_taskbar_style() ? 44 : theme::kPanelHeight;
+    panel_y_ = is_bottom_bar()
                    ? static_cast<int16_t>(primary_mon_rect_.y + primary_mon_rect_.height - height_)
                    : primary_mon_rect_.y;
 
@@ -2578,30 +2592,38 @@ void Panel::handle_appearance_click(int16_t x, int16_t y, uint8_t button) {
         return;
     }
 
-    // Left card: Top Bar (x=[18..224], y=[58..198])
-    if (x >= 18 && x <= 224 && y >= 58 && y <= 198) {
-        set_bar_layout(BarLayout::TopBar);
-        return;
+    const int card_w = std::max(96, (static_cast<int>(popup_w_) - 60) / 3);
+    const int gap = 12;
+    const std::array<BarLayout, 3> layouts = {
+        BarLayout::TopBar,
+        BarLayout::Taskbar,
+        BarLayout::TaskbarTop,
+    };
+
+    // Three layout option cards (y=[58..198])
+    if (y >= 58 && y <= 198) {
+        for (size_t i = 0; i < layouts.size(); ++i) {
+            const int cx = 18 + static_cast<int>(i) * (card_w + gap);
+            if (x >= cx && x <= cx + card_w) {
+                set_bar_layout(layouts[i]);
+                return;
+            }
+        }
     }
 
-    // Right card: Taskbar (x=[240..446], y=[58..198])
-    if (x >= 240 && x <= 446 && y >= 58 && y <= 198) {
-        set_bar_layout(BarLayout::Taskbar);
-        return;
-    }
-
-    // Bottom buttons: Wallpapers [18..154], Swap Monitors [162..302], Settings [310..446]
-    if (y >= 212 && y <= 246) {
-        if (x >= 18 && x <= 154) {
+    // Bottom action buttons (y=[214..248])
+    if (y >= 214 && y <= 248) {
+        const int bx0 = 18;
+        const int bx1 = bx0 + card_w + gap;
+        const int bx2 = bx1 + card_w + gap;
+        if (x >= bx0 && x <= bx0 + card_w) {
             open_popup(PopupKind::WallpaperPicker);
-        } else if (x >= 162 && x <= 302) {
-            const char* xdg = std::getenv("XDG_CONFIG_HOME");
-            const char* home = std::getenv("HOME");
-            std::string cfg_dir = (xdg && *xdg)
-                ? (std::string(xdg) + "/lunar-de")
-                : ((home && *home) ? (std::string(home) + "/.config/lunar-de") : "/tmp");
-            std::filesystem::create_directories(cfg_dir);
-            const std::string script_path = cfg_dir + "/monitor_layout.sh";
+        } else if (x >= bx1 && x <= bx1 + card_w) {
+            std::filesystem::path dir = lunar_de_config_dir();
+            if (dir.empty()) dir = "/tmp";
+            std::error_code ec;
+            std::filesystem::create_directories(dir, ec);
+            const std::string script_path = (dir / "monitor_layout.sh").string();
             const std::string swap_cmd =
                 "python3 -c \""
                 "import subprocess, re, pathlib;"
@@ -2620,7 +2642,7 @@ void Panel::handle_appearance_click(int16_t x, int16_t y, uint8_t button) {
             if (std::system(swap_cmd.c_str()) == 0) {
                 close_popup();
             }
-        } else if (x >= 310 && x <= 446) {
+        } else if (x >= bx2 && x <= bx2 + card_w) {
             close_popup();
             spawn_command("gnome-control-center");
         }
@@ -2631,7 +2653,7 @@ void Panel::draw_appearance() {
     const FontRenderer& f_bold = has_bold_font_ ? font_bold_ : font_regular_;
     const FontRenderer& f_reg = has_regular_font_ ? font_regular_ : font_bold_;
 
-    f_bold.draw_text(popup_canvas_, 18, 34, "Zorin Appearance - Bar Layout", 15, 0xf8fafc);
+    f_bold.draw_text(popup_canvas_, 18, 34, "Appearance - Bar Layout", 15, 0xf8fafc);
 
     // Close X
     {
@@ -2642,28 +2664,52 @@ void Panel::draw_appearance() {
         draw_line_aa(popup_canvas_, cx + 4.0f, cy - 4.0f, cx - 4.0f, cy + 4.0f, 1.5f, 0xcbd5e1, 0.95f);
     }
 
-    auto draw_layout_card = [&](int x, int y, int w, int h, bool active,
-                                bool is_taskbar, const char* title, const char* desc) {
+    const int card_w = std::max(96, (static_cast<int>(popup_w_) - 60) / 3);
+    const int gap = 12;
+
+    struct LayoutCardSpec {
+        BarLayout layout;
+        const char* title;
+        const char* desc;
+    };
+    constexpr std::array<LayoutCardSpec, 3> kCards = {{
+        {BarLayout::TopBar, "Top Bar", "Compact 28px top bar"},
+        {BarLayout::Taskbar, "Taskbar (Bottom)", "Centered 44px bottom bar"},
+        {BarLayout::TaskbarTop, "Taskbar (Top)", "Centered 44px top bar"},
+    }};
+
+    for (size_t i = 0; i < kCards.size(); ++i) {
+        const auto& spec = kCards[i];
+        const int x = 18 + static_cast<int>(i) * (card_w + gap);
+        const int y = 58;
+        const int h = 140;
+        const bool active = (bar_layout_ == spec.layout);
+
         fill_rounded_rect_aa(popup_canvas_, static_cast<float>(x), static_cast<float>(y),
-                             static_cast<float>(w), static_cast<float>(h),
+                             static_cast<float>(card_w), static_cast<float>(h),
                              10.0f, active ? 0x1e3a5f : 0x1e2430, 1.0f);
         stroke_rounded_rect_aa(popup_canvas_, static_cast<float>(x + 0.5f), static_cast<float>(y + 0.5f),
-                               static_cast<float>(w - 1), static_cast<float>(h - 1),
+                               static_cast<float>(card_w - 1), static_cast<float>(h - 1),
                                10.0f, active ? 2.0f : 1.0f, active ? 0x38bdf8 : 0x334155, 0.95f);
 
         // Mini desktop preview box
-        const int px = x + 14;
+        const int px = x + 12;
         const int py = y + 14;
-        const int pw = w - 28;
+        const int pw = card_w - 24;
         const int ph = 78;
         fill_rounded_rect_aa(popup_canvas_, static_cast<float>(px), static_cast<float>(py),
                              static_cast<float>(pw), static_cast<float>(ph),
                              6.0f, 0x0f172a, 1.0f);
-        if (is_taskbar) {
+        if (spec.layout == BarLayout::Taskbar) {
             fill_rounded_rect_aa(popup_canvas_, static_cast<float>(px), static_cast<float>(py + ph - 14),
                                  static_cast<float>(pw), 14.0f, 4.0f, 0x1e293b, 1.0f);
             fill_rounded_rect_aa(popup_canvas_, static_cast<float>(px + pw / 2 - 24),
                                  static_cast<float>(py + ph - 11), 48.0f, 8.0f, 3.0f, 0x38bdf8, 0.9f);
+        } else if (spec.layout == BarLayout::TaskbarTop) {
+            fill_rounded_rect_aa(popup_canvas_, static_cast<float>(px), static_cast<float>(py),
+                                 static_cast<float>(pw), 14.0f, 4.0f, 0x1e293b, 1.0f);
+            fill_rounded_rect_aa(popup_canvas_, static_cast<float>(px + pw / 2 - 24),
+                                 static_cast<float>(py + 3), 48.0f, 8.0f, 3.0f, 0x38bdf8, 0.9f);
         } else {
             fill_rounded_rect_aa(popup_canvas_, static_cast<float>(px), static_cast<float>(py),
                                  static_cast<float>(pw), 11.0f, 4.0f, 0x1e293b, 1.0f);
@@ -2673,23 +2719,30 @@ void Panel::draw_appearance() {
                                  24.0f, 5.0f, 2.0f, 0xe2e8f0, 0.8f);
         }
 
-        f_bold.draw_text(popup_canvas_, x + 14, y + 112, title, 13, 0xf8fafc);
-        f_reg.draw_text(popup_canvas_, x + 14, y + 130, desc, 11, active ? 0x93c5fd : 0x94a3b8);
+        f_bold.draw_text(popup_canvas_, x + 12, y + 112, spec.title, 13, 0xf8fafc);
+        f_reg.draw_text(popup_canvas_, x + 12, y + 130,
+                        ellipsize(f_reg, spec.desc, 11, card_w - 24), 11,
+                        active ? 0x93c5fd : 0x94a3b8);
+    }
+
+    struct ActionBtnSpec {
+        const char* label;
+        uint32_t bg;
+        uint32_t fg;
     };
-
-    draw_layout_card(18, 58, 206, 140, bar_layout_ == BarLayout::TopBar, false,
-                     "Top Bar", "Classic Lunar 28px top bar");
-    draw_layout_card(240, 58, 206, 140, bar_layout_ == BarLayout::Taskbar, true,
-                     "Taskbar (Win 11)", "Centered 44px bottom bar");
-
-    fill_rounded_rect_aa(popup_canvas_, 18.0f, 212.0f, 136.0f, 34.0f, 8.0f, 0x262d3b, 1.0f);
-    f_bold.draw_text(popup_canvas_, 34, 234, "Wallpapers (32+)", 11, 0xf1f5f9);
-
-    fill_rounded_rect_aa(popup_canvas_, 162.0f, 212.0f, 140.0f, 34.0f, 8.0f, 0x1e3a5f, 1.0f);
-    f_bold.draw_text(popup_canvas_, 174, 234, "Swap Monitors (L/R)", 11, 0x93c5fd);
-
-    fill_rounded_rect_aa(popup_canvas_, 310.0f, 212.0f, 136.0f, 34.0f, 8.0f, 0x262d3b, 1.0f);
-    f_bold.draw_text(popup_canvas_, 332, 234, "System Settings", 11, 0xf1f5f9);
+    constexpr std::array<ActionBtnSpec, 3> kBtns = {{
+        {"Wallpapers (32+)", 0x262d3b, 0xf1f5f9},
+        {"Swap Monitors (L/R)", 0x1e3a5f, 0x93c5fd},
+        {"System Settings", 0x262d3b, 0xf1f5f9},
+    }};
+    for (size_t i = 0; i < kBtns.size(); ++i) {
+        const int bx = 18 + static_cast<int>(i) * (card_w + gap);
+        fill_rounded_rect_aa(popup_canvas_, static_cast<float>(bx), 214.0f,
+                             static_cast<float>(card_w), 34.0f, 8.0f, kBtns[i].bg, 1.0f);
+        const int tw = f_bold.measure_text(kBtns[i].label, 11);
+        f_bold.draw_text(popup_canvas_, bx + std::max(8, (card_w - tw) / 2), 236,
+                         kBtns[i].label, 11, kBtns[i].fg);
+    }
 }
 
 void Panel::power_off_system() {
