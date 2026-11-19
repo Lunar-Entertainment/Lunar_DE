@@ -138,7 +138,7 @@ export GIO_USE_VFS=local
 export NO_AT_BRIDGE=1
 export GTK_A11Y=none
 export XDG_SESSION_TYPE=x11
-export XDG_CURRENT_DESKTOP=zorin:GNOME
+export XDG_CURRENT_DESKTOP=Lunar:GNOME
 
 : > "${PID_FILE}"
 

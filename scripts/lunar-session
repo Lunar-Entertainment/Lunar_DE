@@ -1,9 +1,30 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -d "${SCRIPT_DIR}/../share/lunar-de" ]]; then
+    SHARE_DIR="$(cd "${SCRIPT_DIR}/../share/lunar-de" && pwd)"
+elif [[ -d "/usr/local/share/lunar-de" ]]; then
+    SHARE_DIR="/usr/local/share/lunar-de"
+else
+    SHARE_DIR="/usr/share/lunar-de"
+fi
+
+if [[ -x "${SCRIPT_DIR}/lunar-panel" ]]; then
+    LUNAR_PANEL="${SCRIPT_DIR}/lunar-panel"
+else
+    LUNAR_PANEL="$(command -v lunar-panel || echo /usr/bin/lunar-panel)"
+fi
+
+if [[ -x "${SCRIPT_DIR}/lunar-wm" ]]; then
+    LUNAR_WM="${SCRIPT_DIR}/lunar-wm"
+else
+    LUNAR_WM="$(command -v lunar-wm || echo /usr/bin/lunar-wm)"
+fi
+
 unset WAYLAND_DISPLAY
 export XDG_SESSION_TYPE=x11
-export XDG_CURRENT_DESKTOP=zorin:GNOME
+export XDG_CURRENT_DESKTOP=Lunar:GNOME
 export GDK_BACKEND=x11
 export QT_QPA_PLATFORM=xcb
 export SDL_VIDEODRIVER=x11
@@ -14,35 +35,72 @@ export GIO_USE_VFS=local
 export NO_AT_BRIDGE=1
 export GTK_A11Y=none
 
-if [[ -d "/usr/local/share/lunar-de" ]]; then
-    SHARE_DIR="/usr/local/share/lunar-de"
-else
-    SHARE_DIR="/usr/share/lunar-de"
+# Ensure xdg-desktop-portal resolves to gtk (never gnome) so GTK apps don't stall 25s
+PORTAL_USER_DIR="${XDG_CONFIG_HOME:-${HOME}/.config}/xdg-desktop-portal"
+if [[ ! -f "${PORTAL_USER_DIR}/lunar-portals.conf" ]]; then
+    mkdir -p "${PORTAL_USER_DIR}"
+    cat > "${PORTAL_USER_DIR}/lunar-portals.conf" <<'EOF'
+[preferred]
+default=gtk;
+org.freedesktop.impl.portal.Secret=gnome-keyring;
+EOF
 fi
-LUNAR_PANEL="$(command -v lunar-panel || echo /usr/bin/lunar-panel)"
-LUNAR_WM="$(command -v lunar-wm || echo /usr/bin/lunar-wm)"
+
 PID_FILE="/tmp/lunar-de-pids.txt"
 : > "${PID_FILE}"
 
 if command -v systemctl >/dev/null 2>&1; then
     systemctl --user unset-environment WAYLAND_DISPLAY 2>/dev/null || true
     systemctl --user import-environment \
-        DISPLAY XAUTHORITY XDG_SESSION_TYPE XDG_CURRENT_DESKTOP GDK_BACKEND \
-        QT_QPA_PLATFORM GTK_USE_PORTAL GIO_USE_VFS NO_AT_BRIDGE GTK_A11Y \
+        DISPLAY XAUTHORITY LANG LC_ALL XDG_SESSION_TYPE XDG_CURRENT_DESKTOP \
+        GDK_BACKEND QT_QPA_PLATFORM GTK_USE_PORTAL GIO_USE_VFS NO_AT_BRIDGE GTK_A11Y \
         2>/dev/null || true
+    systemctl --user restart xdg-desktop-portal.service 2>/dev/null &
 fi
 
 if command -v dbus-update-activation-environment >/dev/null 2>&1; then
     dbus-update-activation-environment --systemd \
-        DISPLAY XAUTHORITY XDG_SESSION_TYPE XDG_CURRENT_DESKTOP GDK_BACKEND \
-        QT_QPA_PLATFORM SDL_VIDEODRIVER CLUTTER_BACKEND ELECTRON_OZONE_PLATFORM_HINT \
-        GTK_USE_PORTAL GIO_USE_VFS NO_AT_BRIDGE GTK_A11Y \
+        DISPLAY XAUTHORITY LANG LC_ALL XDG_SESSION_TYPE XDG_CURRENT_DESKTOP \
+        GDK_BACKEND QT_QPA_PLATFORM SDL_VIDEODRIVER CLUTTER_BACKEND \
+        ELECTRON_OZONE_PLATFORM_HINT GTK_USE_PORTAL GIO_USE_VFS NO_AT_BRIDGE GTK_A11Y \
         2>/dev/null || true
 fi
 
 CFG_DIR="${XDG_CONFIG_HOME:-${HOME}/.config}/lunar-de"
 if [[ -f "${CFG_DIR}/monitor_layout.sh" ]]; then
     sh "${CFG_DIR}/monitor_layout.sh" 2>/dev/null || true
+elif command -v xrandr >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1; then
+    python3 - <<'EOF' 2>/dev/null || true
+import re, subprocess
+
+out = subprocess.check_output(["xrandr", "--query"], text=True)
+pattern = re.compile(
+    r"^(\S+)\s+connected\s+(primary\s+)?(\d+x\d+)\+(\d+)\+(\d+)[^\n]*?(\d+)mm\s+x\s+\d+mm",
+    re.M,
+)
+mons = []
+for m in pattern.finditer(out):
+    mons.append({
+        "name": m.group(1),
+        "primary": bool(m.group(2)),
+        "res": m.group(3),
+        "x": int(m.group(4)),
+        "y": int(m.group(5)),
+        "mm_w": int(m.group(6)),
+    })
+
+if len(mons) >= 2:
+    prim = next((m for m in mons if m["primary"]), None)
+    if prim is None:
+        prim = max(mons, key=lambda m: m["mm_w"])
+    rest = [m for m in mons if m["name"] != prim["name"]]
+    cmd = ["xrandr", "--output", prim["name"], "--primary", "--auto", "--pos", "0x0"]
+    prev = prim["name"]
+    for sec in rest:
+        cmd.extend(["--output", sec["name"], "--auto", "--right-of", prev])
+        prev = sec["name"]
+    subprocess.run(cmd, check=False)
+EOF
 fi
 
 if command -v picom >/dev/null 2>&1 && [[ -f "${SHARE_DIR}/config/picom.conf" ]]; then

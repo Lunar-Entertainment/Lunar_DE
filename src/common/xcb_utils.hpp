@@ -78,7 +78,7 @@ inline void prepare_x11_app_env() {
     setenv("GIO_USE_VFS", "local", 1);
     setenv("NO_AT_BRIDGE", "1", 1);
     setenv("GTK_A11Y", "none", 1);
-    setenv("XDG_CURRENT_DESKTOP", "zorin:GNOME", 1);
+    setenv("XDG_CURRENT_DESKTOP", "Lunar:GNOME", 1);
 }
 
 inline std::vector<MonitorInfo> query_monitors(xcb_connection_t* conn, const xcb_screen_t* screen) {

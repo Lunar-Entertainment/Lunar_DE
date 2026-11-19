@@ -20,6 +20,7 @@ mkdir -p \
     "${STAGE_DIR}/DEBIAN" \
     "${STAGE_DIR}/usr/bin" \
     "${STAGE_DIR}/usr/share/xsessions" \
+    "${STAGE_DIR}/usr/share/xdg-desktop-portal" \
     "${STAGE_DIR}/usr/share/lunar-de/config" \
     "${STAGE_DIR}/usr/share/lunar-de/scripts" \
     "${STAGE_DIR}/usr/share/lunar-de/assets/wallpapers" \
@@ -43,6 +44,7 @@ EOF
 chmod 0644 "${STAGE_DIR}/usr/share/xsessions/lunar.desktop"
 
 install -m 0644 "${ROOT_DIR}/config/picom.conf" "${STAGE_DIR}/usr/share/lunar-de/config/picom.conf"
+install -m 0644 "${ROOT_DIR}/config/lunar-portals.conf" "${STAGE_DIR}/usr/share/xdg-desktop-portal/lunar-portals.conf"
 install -m 0755 "${ROOT_DIR}/scripts/lunar_live.py" "${STAGE_DIR}/usr/share/lunar-de/scripts/lunar_live.py"
 install -m 0755 "${ROOT_DIR}/scripts/render_icons.py" "${STAGE_DIR}/usr/share/lunar-de/scripts/render_icons.py"
 

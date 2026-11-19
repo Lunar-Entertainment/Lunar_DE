@@ -14,6 +14,7 @@ sudo install -Dm755 "${BUILD_DIR}/lunar-panel" /usr/local/bin/lunar-panel
 sudo install -Dm755 "${ROOT_DIR}/scripts/lunar-session" /usr/local/bin/lunar-session
 
 sudo install -Dm644 "${ROOT_DIR}/config/picom.conf" /usr/local/share/lunar-de/config/picom.conf
+sudo install -Dm644 "${ROOT_DIR}/config/lunar-portals.conf" /usr/share/xdg-desktop-portal/lunar-portals.conf
 sudo install -Dm755 "${ROOT_DIR}/scripts/lunar_live.py" /usr/local/share/lunar-de/scripts/lunar_live.py
 sudo install -Dm755 "${ROOT_DIR}/scripts/render_icons.py" /usr/local/share/lunar-de/scripts/render_icons.py
 
