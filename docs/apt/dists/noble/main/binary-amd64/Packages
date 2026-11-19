@@ -103,3 +103,24 @@ Description: Minimal modular C++20 X11 Desktop Environment
  layouts, 32 bundled wallpapers with smooth cross-fades, Gemini Live voice
  integration, and boot auto-updates.
 
+Package: lunar-de
+Version: 1.0.7
+Architecture: amd64
+Maintainer: Lunar Entertainment <lunar@users.noreply.github.com>
+Installed-Size: 4556
+Depends: libc6, libstdc++6, libxcb1, libxcb-util1, libxcb-ewmh2, libxcb-icccm4, libxcb-keysyms1, libxcb-randr0, libxkbcommon0, libjpeg-turbo8 | libjpeg8, libpng16-16t64 | libpng16-16, libfontconfig1, libfreetype6, picom, python3, python3-gi, python3-gi-cairo, gir1.2-gtk-3.0, x11-xserver-utils, xdotool, pulseaudio-utils
+Recommends: python3-websockets, ffmpeg
+Filename: pool/main/lunar-de_1.0.7_amd64.deb
+Size: 2910514
+MD5sum: 34f265e495c7c131314b35e38f19ddf6
+SHA1: df4310dd2eef0d34fedf0f5e398d924750105b38
+SHA256: 0014ee3fea66828a69f8a5006ebca18577b55809d9f32eaeb5691f5928bfd9e0
+Section: x11
+Priority: optional
+Homepage: https://lunar-entertainment.github.io/Lunar_DE/
+Description: Minimal modular C++20 X11 Desktop Environment
+ Lunar DE is built from scratch in C++20 directly on libxcb, featuring
+ multi-monitor RandR support, Aero Snap, Top Bar & Windows 11 Taskbar
+ layouts, 32 bundled wallpapers with smooth cross-fades, Gemini Live voice
+ integration, and boot auto-updates.
+
