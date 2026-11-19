@@ -100,9 +100,9 @@ if command -v journalctl >/dev/null 2>&1; then
 fi
 
 section "Lunar DE Session Logs"
-for f in /tmp/lunar-wm.log /tmp/lunar-panel.log /tmp/lunar-picom.log /tmp/lunar-live.log; do
+for f in /tmp/lunar-wm.log /tmp/lunar-panel.log /tmp/lunar-picom.log /tmp/lunar-live.log /tmp/lunar-apps.log; do
     if [[ -f "$f" ]]; then
-        echo "--- $f (last 15 lines) ---"
-        tail -n 15 "$f"
+        echo "--- $f (last 20 lines) ---"
+        tail -n 20 "$f"
     fi
 done

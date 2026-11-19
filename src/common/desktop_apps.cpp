@@ -6,9 +6,11 @@
 #include <cctype>
 #include <cstdio>
 #include <cstdlib>
+#include <fcntl.h>
 #include <filesystem>
 #include <fstream>
 #include <png.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #include <unordered_set>
 
@@ -95,6 +97,65 @@ std::string map_category(const std::string& raw_cats) {
     return "Utilities";
 }
 
+bool executable_exists(const std::string& bin) {
+    if (bin.empty()) return false;
+    if (bin.find('/') != std::string::npos) {
+        return access(bin.c_str(), X_OK) == 0;
+    }
+    const char* path_env = std::getenv("PATH");
+    if (!path_env || !*path_env) return false;
+    std::string path_str(path_env);
+    size_t start = 0;
+    while (start <= path_str.size()) {
+        size_t end = path_str.find(':', start);
+        if (end == std::string::npos) end = path_str.size();
+        const std::string dir = path_str.substr(start, end - start);
+        const std::string full = (dir.empty() ? "." : dir) + "/" + bin;
+        if (access(full.c_str(), X_OK) == 0) return true;
+        if (end == path_str.size()) break;
+        start = end + 1;
+    }
+    return false;
+}
+
+std::string next_exec_token(const std::string& cmd, size_t& pos) {
+    while (pos < cmd.size() && std::isspace(static_cast<unsigned char>(cmd[pos]))) ++pos;
+    if (pos >= cmd.size()) return {};
+    std::string tok;
+    const char q = (cmd[pos] == '"' || cmd[pos] == '\'') ? cmd[pos++] : '\0';
+    while (pos < cmd.size()) {
+        const char ch = cmd[pos++];
+        if (q != '\0') {
+            if (ch == '\\' && q == '"' && pos < cmd.size()) {
+                tok.push_back(cmd[pos++]);
+            } else if (ch == q) {
+                break;
+            } else {
+                tok.push_back(ch);
+            }
+        } else {
+            if (std::isspace(static_cast<unsigned char>(ch))) break;
+            if (ch == '\\' && pos < cmd.size()) tok.push_back(cmd[pos++]);
+            else tok.push_back(ch);
+        }
+    }
+    return tok;
+}
+
+std::string extract_first_command_token(const std::string& cmd) {
+    size_t pos = 0;
+    std::string tok = next_exec_token(cmd, pos);
+    if (tok == "env" || tok == "/usr/bin/env") {
+        while (!(tok = next_exec_token(cmd, pos)).empty()) {
+            if (tok.find('=') == std::string::npos && tok != "-i" && tok != "-u") {
+                return tok;
+            }
+        }
+        return {};
+    }
+    return tok;
+}
+
 bool parse_desktop_file(const fs::path& path, DesktopApp& out) {
     std::ifstream in(path);
     if (!in.is_open()) return false;
@@ -104,6 +165,7 @@ bool parse_desktop_file(const fs::path& path, DesktopApp& out) {
     bool hidden = false;
     std::string type;
     std::string raw_cats;
+    std::string try_exec;
 
     out = DesktopApp{};
     out.id = path.filename().string();
@@ -131,6 +193,7 @@ bool parse_desktop_file(const fs::path& path, DesktopApp& out) {
         else if (key == "Name" && out.name.empty()) out.name = val;
         else if (key == "Comment" && out.comment.empty()) out.comment = val;
         else if (key == "Exec" && out.exec_cmd.empty()) out.exec_cmd = clean_exec_line(val);
+        else if (key == "TryExec" && try_exec.empty()) try_exec = val;
         else if (key == "Path" && out.working_dir.empty()) out.working_dir = val;
         else if (key == "Icon" && out.icon_name.empty()) out.icon_name = val;
         else if (key == "Categories" && raw_cats.empty()) raw_cats = val;
@@ -140,6 +203,13 @@ bool parse_desktop_file(const fs::path& path, DesktopApp& out) {
     }
 
     if (type != "Application" || no_display || hidden || out.name.empty() || out.exec_cmd.empty()) {
+        return false;
+    }
+    if (!try_exec.empty() && !executable_exists(try_exec)) {
+        return false;
+    }
+    const std::string first_bin = extract_first_command_token(out.exec_cmd);
+    if (!first_bin.empty() && first_bin.front() == '/' && !executable_exists(first_bin)) {
         return false;
     }
 
@@ -258,10 +328,12 @@ void AppRegistry::load() {
     std::vector<std::string> app_dirs;
     if (home && *home) {
         app_dirs.push_back(std::string(home) + "/.local/share/applications");
+    }
+    app_dirs.push_back("/usr/share/applications");
+    if (home && *home) {
         app_dirs.push_back(std::string(home) + "/.local/share/flatpak/exports/share/applications");
     }
     app_dirs.push_back("/var/lib/flatpak/exports/share/applications");
-    app_dirs.push_back("/usr/share/applications");
     app_dirs.push_back("/var/lib/snapd/desktop/applications");
 
     std::unordered_set<std::string> seen_ids;
@@ -278,8 +350,21 @@ void AppRegistry::load() {
 
             DesktopApp app;
             if (parse_desktop_file(entry.path(), app)) {
-                const std::string name_key = to_lower(app.name);
-                if (seen_names.contains(name_key)) continue;
+                std::string name_key = to_lower(app.name);
+                if (seen_names.contains(name_key)) {
+                    if (dir.find("flatpak") != std::string::npos) {
+                        app.name += " (Flatpak)";
+                    } else if (dir.find("snapd") != std::string::npos) {
+                        app.name += " (Snap)";
+                    } else {
+                        app.name += " (" + entry.path().stem().string() + ")";
+                    }
+                    name_key = to_lower(app.name);
+                    if (seen_names.contains(name_key)) {
+                        app.name += " [" + id + "]";
+                        name_key = to_lower(app.name);
+                    }
+                }
                 seen_ids.insert(id);
                 seen_names.insert(name_key);
                 apps_.push_back(std::move(app));
@@ -482,7 +567,7 @@ void AppRegistry::launch_app(const DesktopApp& app) {
         const std::string extra =
             " --env=DISPLAY=" + display_str +
             " --env=GDK_BACKEND=x11 --env=QT_QPA_PLATFORM=xcb"
-            " --env=ELECTRON_OZONE_PLATFORM_HINT=x11 --env=GTK_USE_PORTAL=0";
+            " --env=ELECTRON_OZONE_PLATFORM_HINT=x11";
         cmd.insert(insert_at, extra);
     }
 
@@ -499,6 +584,19 @@ void AppRegistry::launch_app(const DesktopApp& app) {
     const pid_t pid = fork();
     if (pid == 0) {
         setsid();
+        const int devnull_fd = open("/dev/null", O_RDONLY);
+        if (devnull_fd >= 0) {
+            dup2(devnull_fd, STDIN_FILENO);
+            if (devnull_fd > STDERR_FILENO) close(devnull_fd);
+        }
+        const int log_fd = open("/tmp/lunar-apps.log", O_WRONLY | O_CREAT | O_APPEND, 0644);
+        if (log_fd >= 0) {
+            dup2(log_fd, STDOUT_FILENO);
+            dup2(log_fd, STDERR_FILENO);
+            if (log_fd > STDERR_FILENO) close(log_fd);
+        }
+        dprintf(STDERR_FILENO, "[lunar-launch] %s (%s): %s\n",
+                app.name.c_str(), app.id.c_str(), cmd.c_str());
         prepare_x11_app_env();
         if (cmd.find("gnome-control-center") != std::string::npos) {
             setenv("XDG_CURRENT_DESKTOP", "GNOME", 1);

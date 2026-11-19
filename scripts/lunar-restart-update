@@ -43,6 +43,14 @@ DISP_NUM="${DISP_NUM##*:}"
 DISP_NUM="${DISP_NUM%%.*}"
 DISP_NUM="${DISP_NUM:-0}"
 WM_PID_FILE="/tmp/lunar-wm-${DISP_NUM}.pid"
+LOCK_FILE="/tmp/lunar-restarting-${DISP_NUM}.lock"
+PANEL_LOG="/tmp/lunar-panel.log"
+if [[ "${LUNAR_XEPHYR:-0}" == "1" ]]; then
+    PANEL_LOG="/tmp/lunar-x2-panel.log"
+fi
+
+touch "${LOCK_FILE}"
+trap 'rm -f "${LOCK_FILE}"' EXIT
 
 WM_PID=""
 if [[ -r "${WM_PID_FILE}" ]]; then
@@ -74,7 +82,7 @@ if [[ ! -x "${NEW_PANEL}" ]]; then
 fi
 
 echo "Launching new lunar-panel: ${NEW_PANEL}"
-"${NEW_PANEL}" </dev/null >/tmp/lunar-panel.log 2>&1 &
+"${NEW_PANEL}" </dev/null >"${PANEL_LOG}" 2>&1 &
 NEW_PANEL_PID=$!
 
 if [[ "${LUNAR_XEPHYR:-0}" != "1" ]]; then

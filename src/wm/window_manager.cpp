@@ -7,6 +7,9 @@
 #include <cctype>
 #include <cerrno>
 #include <cstring>
+#include <ctime>
+#include <fcntl.h>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <poll.h>
@@ -84,6 +87,7 @@ bool WindowManager::init(const char* display_name) {
         }
         return false;
     }
+    fcntl(xcb_get_file_descriptor(conn_), F_SETFD, FD_CLOEXEC);
 
     screen_ = get_screen(conn_, screen_idx_);
     if (!screen_) {
@@ -119,6 +123,7 @@ bool WindowManager::init(const char* display_name) {
 
     wm_protocols_atom_ = intern_atom(conn_, "WM_PROTOCOLS");
     wm_delete_window_atom_ = intern_atom(conn_, "WM_DELETE_WINDOW");
+    wm_state_atom_ = intern_atom(conn_, "WM_STATE");
     motif_wm_hints_atom_ = intern_atom(conn_, "_MOTIF_WM_HINTS");
     gtk_frame_extents_atom_ = intern_atom(conn_, "_GTK_FRAME_EXTENTS");
     lunar_panel_win_atom_ = intern_atom(conn_, ipc::kPanelWindowAtom);
@@ -130,7 +135,7 @@ bool WindowManager::init(const char* display_name) {
     xcb_flush(conn_);
 
     {
-        std::string disp = "0";
+        display_tag_ = "0";
         if (const char* disp_env = std::getenv("DISPLAY"); disp_env && *disp_env) {
             std::string raw(disp_env);
             const size_t colon = raw.find(':');
@@ -143,9 +148,9 @@ bool WindowManager::init(const char* display_name) {
                     clean.push_back(static_cast<char>(c));
                 }
             }
-            if (!clean.empty()) disp = clean;
+            if (!clean.empty()) display_tag_ = clean;
         }
-        std::ofstream pid_out("/tmp/lunar-wm-" + disp + ".pid");
+        std::ofstream pid_out("/tmp/lunar-wm-" + display_tag_ + ".pid");
         if (pid_out) {
             pid_out << getpid() << '\n';
         }
@@ -363,7 +368,10 @@ void WindowManager::draw_desktop_icons(ImageBuffer& img) {
 
 void WindowManager::terminate_session() {
     const pid_t self_pid = getpid();
-    std::ifstream pids_in("/tmp/lunar-de-pids.txt");
+    const char* xephyr = std::getenv("LUNAR_XEPHYR");
+    const bool is_xephyr = (xephyr && *xephyr == '1');
+    const char* pid_path = is_xephyr ? "/tmp/lunar-de-x2.pids" : "/tmp/lunar-de-pids.txt";
+    std::ifstream pids_in(pid_path);
     std::string line;
     while (std::getline(pids_in, line)) {
         const long p = std::strtol(line.c_str(), nullptr, 10);
@@ -371,7 +379,7 @@ void WindowManager::terminate_session() {
             kill(static_cast<pid_t>(p), SIGTERM);
         }
     }
-    if (const char* xephyr = std::getenv("LUNAR_XEPHYR"); xephyr && *xephyr == '1') {
+    if (is_xephyr) {
         std::ifstream x_in("/tmp/lunar-xephyr.pid");
         if (std::getline(x_in, line)) {
             const long xp = std::strtol(line.c_str(), nullptr, 10);
@@ -591,6 +599,7 @@ int WindowManager::run() {
     running_ = 1;
     restart_requested_ = 0;
     const int xfd = xcb_get_file_descriptor(conn_);
+    std::time_t last_panel_check = std::time(nullptr);
 
     while (running_) {
         UniqueMalloc<xcb_generic_event_t> pending_motion;
@@ -616,6 +625,16 @@ int WindowManager::run() {
             return 1;
         }
         if (!running_) break;
+
+        if (docks_.empty() && running_ && !restart_requested_) {
+            const std::time_t now = std::time(nullptr);
+            if (now - last_panel_check >= 2) {
+                last_panel_check = now;
+                if (!is_panel_alive()) {
+                    ensure_panel_alive();
+                }
+            }
+        }
 
         struct pollfd pfd{};
         pfd.fd = xfd;
@@ -1177,6 +1196,12 @@ void WindowManager::manage_client(xcb_window_t win) {
     xcb_map_window(conn_, win);
     xcb_map_window(conn_, frame);
 
+    if (wm_state_atom_ != XCB_ATOM_NONE) {
+        const uint32_t wm_state_data[2] = {1 /*NormalState*/, XCB_WINDOW_NONE};
+        xcb_change_property(conn_, XCB_PROP_MODE_REPLACE, win, wm_state_atom_,
+                            wm_state_atom_, 32, 2, wm_state_data);
+    }
+
     if (ewmh_initialized_) {
         xcb_ewmh_get_atoms_reply_t states{};
         auto st_cookie = xcb_ewmh_get_wm_state(&ewmh_, win);
@@ -1200,7 +1225,7 @@ void WindowManager::manage_client(xcb_window_t win) {
     raise_docks();
 }
 
-void WindowManager::unmanage_window(xcb_window_t win) {
+void WindowManager::unmanage_window(xcb_window_t win, bool destroyed) {
     if (docks_.erase(win) > 0) {
         recompute_workarea();
         return;
@@ -1213,13 +1238,28 @@ void WindowManager::unmanage_window(xcb_window_t win) {
 
     const xcb_window_t frame = it->second.frame;
     const xcb_gcontext_t title_gc = it->second.title_gc;
+    const Rect rect = it->second.rect;
     clients_.erase(it);
     if (frame != XCB_WINDOW_NONE) {
         frame_to_client_.erase(frame);
+        if (!destroyed) {
+            xcb_grab_server(conn_);
+            if (wm_state_atom_ != XCB_ATOM_NONE) {
+                const uint32_t wm_state_data[2] = {0 /*WithdrawnState*/, XCB_WINDOW_NONE};
+                xcb_change_property(conn_, XCB_PROP_MODE_REPLACE, win, wm_state_atom_,
+                                    wm_state_atom_, 32, 2, wm_state_data);
+            }
+            xcb_reparent_window(conn_, win, screen_->root, rect.x, rect.y);
+            xcb_change_save_set(conn_, XCB_SET_MODE_DELETE, win);
+            xcb_destroy_window(conn_, frame);
+            xcb_ungrab_server(conn_);
+            xcb_flush(conn_);
+        } else {
+            xcb_destroy_window(conn_, frame);
+        }
         if (title_gc != XCB_NONE) {
             xcb_free_gc(conn_, title_gc);
         }
-        xcb_destroy_window(conn_, frame);
     }
     ignore_unmap_.erase(win);
 
@@ -1321,7 +1361,7 @@ void WindowManager::on_configure_request(const xcb_configure_request_event_t* ev
 }
 
 void WindowManager::on_destroy_notify(const xcb_destroy_notify_event_t* ev) {
-    unmanage_window(ev->window);
+    unmanage_window(ev->window, true);
 }
 
 void WindowManager::on_unmap_notify(const xcb_unmap_notify_event_t* ev) {
@@ -1335,7 +1375,7 @@ void WindowManager::on_unmap_notify(const xcb_unmap_notify_event_t* ev) {
         }
         return;
     }
-    unmanage_window(ev->window);
+    unmanage_window(ev->window, false);
 }
 
 void WindowManager::on_enter_notify(const xcb_enter_notify_event_t* ev) {
@@ -2370,19 +2410,99 @@ void WindowManager::update_client_list() {
                                       count > 0 ? client_order_.data() : nullptr);
 }
 
+namespace {
+
+xcb_window_t query_live_panel_window(xcb_connection_t* conn, xcb_window_t root, xcb_atom_t panel_atom) {
+    if (!conn || root == XCB_WINDOW_NONE || panel_atom == XCB_ATOM_NONE) {
+        return XCB_WINDOW_NONE;
+    }
+    auto cookie = xcb_get_property(conn, 0, root, panel_atom, XCB_ATOM_WINDOW, 0, 1);
+    UniqueMalloc<xcb_get_property_reply_t> reply(
+        xcb_get_property_reply(conn, cookie, nullptr));
+    if (!reply || xcb_get_property_value_length(reply.get()) < 4) {
+        return XCB_WINDOW_NONE;
+    }
+    const xcb_window_t panel_win = *static_cast<const xcb_window_t*>(
+        xcb_get_property_value(reply.get()));
+    if (panel_win == XCB_WINDOW_NONE) {
+        return XCB_WINDOW_NONE;
+    }
+    auto attr_cookie = xcb_get_window_attributes(conn, panel_win);
+    UniqueMalloc<xcb_get_window_attributes_reply_t> attr(
+        xcb_get_window_attributes_reply(conn, attr_cookie, nullptr));
+    return attr ? panel_win : static_cast<xcb_window_t>(XCB_WINDOW_NONE);
+}
+
+} // namespace
+
+bool WindowManager::is_panel_alive() {
+    return query_live_panel_window(conn_,
+                                   screen_ ? screen_->root : static_cast<xcb_window_t>(XCB_WINDOW_NONE),
+                                   lunar_panel_win_atom_) != XCB_WINDOW_NONE;
+}
+
+void WindowManager::ensure_panel_alive() {
+    if (!running_ || restart_requested_) return;
+
+    std::error_code ec;
+    const std::string lock_path = "/tmp/lunar-restarting-" + display_tag_ + ".lock";
+    if (std::filesystem::exists(lock_path, ec)) return;
+
+    const std::time_t now = std::time(nullptr);
+    if (now - last_panel_spawn_time_ < 3) return;
+    last_panel_spawn_time_ = now;
+
+    const std::filesystem::path self_exe(resolve_self_exe_path("/usr/bin/lunar-wm"));
+    const std::filesystem::path sibling = self_exe.parent_path() / "lunar-panel";
+    std::string panel_bin = "lunar-panel";
+    if (std::filesystem::exists(sibling, ec)) {
+        panel_bin = sibling.string();
+    } else if (std::filesystem::exists("/usr/bin/lunar-panel", ec)) {
+        panel_bin = "/usr/bin/lunar-panel";
+    }
+
+    const char* xephyr = std::getenv("LUNAR_XEPHYR");
+    const bool is_xephyr = (xephyr && *xephyr == '1');
+    const char* log_path = is_xephyr ? "/tmp/lunar-x2-panel.log" : "/tmp/lunar-panel.log";
+
+    std::cout << "lunar-wm: panel missing, respawning " << panel_bin << '\n';
+    const pid_t pid = fork();
+    if (pid == 0) {
+        setsid();
+        const int devnull_fd = open("/dev/null", O_RDONLY);
+        if (devnull_fd >= 0) {
+            dup2(devnull_fd, STDIN_FILENO);
+            if (devnull_fd > STDERR_FILENO) close(devnull_fd);
+        }
+        const int log_fd = open(log_path, O_WRONLY | O_CREAT | O_APPEND, 0644);
+        if (log_fd >= 0) {
+            dup2(log_fd, STDOUT_FILENO);
+            dup2(log_fd, STDERR_FILENO);
+            if (log_fd > STDERR_FILENO) close(log_fd);
+        }
+        const char* argv[] = {panel_bin.c_str(), nullptr};
+        execvp(argv[0], const_cast<char* const*>(argv));
+        _exit(127);
+    }
+    if (pid > 0) {
+        const char* pid_path = is_xephyr ? "/tmp/lunar-de-x2.pids" : "/tmp/lunar-de-pids.txt";
+        std::ofstream pid_out(pid_path, std::ios::app);
+        if (pid_out) {
+            pid_out << pid << '\n';
+        }
+    }
+}
+
 void WindowManager::send_panel_action(uint32_t action, uint32_t arg1, uint32_t arg2) {
     if (lunar_panel_win_atom_ == XCB_ATOM_NONE || lunar_panel_action_atom_ == XCB_ATOM_NONE) {
         return;
     }
-    auto cookie = xcb_get_property(conn_, 0, screen_->root, lunar_panel_win_atom_,
-                                   XCB_ATOM_WINDOW, 0, 1);
-    UniqueMalloc<xcb_get_property_reply_t> reply(
-        xcb_get_property_reply(conn_, cookie, nullptr));
-    if (!reply || xcb_get_property_value_length(reply.get()) < 4) return;
-
-    const xcb_window_t panel_win = *static_cast<const xcb_window_t*>(
-        xcb_get_property_value(reply.get()));
-    if (panel_win == XCB_WINDOW_NONE) return;
+    const xcb_window_t panel_win = query_live_panel_window(
+        conn_, screen_ ? screen_->root : static_cast<xcb_window_t>(XCB_WINDOW_NONE), lunar_panel_win_atom_);
+    if (panel_win == XCB_WINDOW_NONE) {
+        ensure_panel_alive();
+        return;
+    }
 
     xcb_client_message_event_t msg{};
     msg.response_type = XCB_CLIENT_MESSAGE;

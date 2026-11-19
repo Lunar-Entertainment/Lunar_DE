@@ -5,9 +5,9 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="${ROOT_DIR}/build"
 TEST_DISPLAY=":2"
 PID_FILE="/tmp/lunar-de-x2.pids"
-WM_LOG="/tmp/lunar-wm.log"
-PANEL_LOG="/tmp/lunar-panel.log"
-TERM_LOG="/tmp/lunar-term.log"
+WM_LOG="/tmp/lunar-x2-wm.log"
+PANEL_LOG="/tmp/lunar-x2-panel.log"
+TERM_LOG="/tmp/lunar-x2-term.log"
 LUNAR_RT="/tmp/lunar-rt-$(id -u)-x2"
 
 XEPHYR_FULLSCREEN=0
@@ -161,7 +161,7 @@ echo "$!" >> "${PID_FILE}"
 sleep 0.3
 
 if command -v picom >/dev/null 2>&1 && [[ -f "${ROOT_DIR}/config/picom.conf" ]]; then
-    setsid picom --config "${ROOT_DIR}/config/picom.conf" </dev/null >/tmp/lunar-picom.log 2>&1 &
+    setsid picom --config "${ROOT_DIR}/config/picom.conf" </dev/null >/tmp/lunar-x2-picom.log 2>&1 &
     echo "$!" >> "${PID_FILE}"
     sleep 0.2
 fi
@@ -170,9 +170,9 @@ setsid "${BUILD_DIR}/lunar-panel" </dev/null >"${PANEL_LOG}" 2>&1 &
 echo "$!" >> "${PID_FILE}"
 sleep 0.2
 
-pkill -f "scripts/lunar_live.py" 2>/dev/null || true
+pkill -f "${ROOT_DIR}/scripts/lunar_live.py" 2>/dev/null || true
 if command -v python3 >/dev/null 2>&1 && [[ -f "${ROOT_DIR}/scripts/lunar_live.py" ]]; then
-    setsid python3 "${ROOT_DIR}/scripts/lunar_live.py" </dev/null >/tmp/lunar-live.log 2>&1 &
+    setsid python3 "${ROOT_DIR}/scripts/lunar_live.py" </dev/null >/tmp/lunar-x2-live.log 2>&1 &
     echo "$!" >> "${PID_FILE}"
 fi
 

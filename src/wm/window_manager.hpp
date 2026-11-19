@@ -2,6 +2,7 @@
 
 #include <csignal>
 #include <cstdint>
+#include <ctime>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -110,7 +111,7 @@ private:
 
     void manage_dock(xcb_window_t win);
     void manage_client(xcb_window_t win);
-    void unmanage_window(xcb_window_t win);
+    void unmanage_window(xcb_window_t win, bool destroyed = false);
 
     void recompute_workarea();
     Rect workarea_for_monitor(const Rect& mon) const noexcept;
@@ -138,6 +139,8 @@ private:
     void cycle_focus();
     void close_window(xcb_window_t win);
     void update_client_list();
+    bool is_panel_alive();
+    void ensure_panel_alive();
     void send_panel_action(uint32_t action, uint32_t arg1 = 0, uint32_t arg2 = 0);
     void spawn_terminal();
 
@@ -172,6 +175,7 @@ private:
 
     xcb_atom_t wm_protocols_atom_ = XCB_ATOM_NONE;
     xcb_atom_t wm_delete_window_atom_ = XCB_ATOM_NONE;
+    xcb_atom_t wm_state_atom_ = XCB_ATOM_NONE;
     xcb_atom_t motif_wm_hints_atom_ = XCB_ATOM_NONE;
     xcb_atom_t gtk_frame_extents_atom_ = XCB_ATOM_NONE;
     xcb_atom_t lunar_panel_win_atom_ = XCB_ATOM_NONE;
@@ -205,6 +209,8 @@ private:
 
     volatile sig_atomic_t running_ = 0;
     volatile sig_atomic_t restart_requested_ = 0;
+    std::string display_tag_ = "0";
+    std::time_t last_panel_spawn_time_ = 0;
 };
 
 } // namespace lunar

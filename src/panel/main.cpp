@@ -25,6 +25,7 @@ void handle_sigchld(int /*sig*/) {
 int main() {
     std::cout << std::unitbuf;
     std::cerr << std::unitbuf;
+    std::signal(SIGPIPE, SIG_IGN);
 
     struct sigaction chld_sa{};
     chld_sa.sa_handler = handle_sigchld;

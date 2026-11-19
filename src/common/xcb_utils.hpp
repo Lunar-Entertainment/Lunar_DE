@@ -101,7 +101,7 @@ inline void prepare_x11_app_env() {
     setenv("CLUTTER_BACKEND", "x11", 1);
     setenv("ELECTRON_OZONE_PLATFORM_HINT", "x11", 1);
     setenv("GTK_USE_PORTAL", "0", 1);
-    setenv("GIO_USE_VFS", "local", 1);
+    unsetenv("GIO_USE_VFS");
     setenv("NO_AT_BRIDGE", "1", 1);
     setenv("GTK_A11Y", "none", 1);
     setenv("XDG_CURRENT_DESKTOP", "Lunar", 1);

@@ -9,6 +9,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <ctime>
+#include <fcntl.h>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -177,6 +178,7 @@ bool Panel::init(const char* display_name) {
         }
         return false;
     }
+    fcntl(xcb_get_file_descriptor(conn_), F_SETFD, FD_CLOEXEC);
 
     screen_ = get_screen(conn_, screen_idx_);
     if (!screen_) {
@@ -2048,7 +2050,9 @@ void Panel::draw_status_icons(int right_edge_x) {
 void Panel::redraw() {
     if (backbuf_ == XCB_PIXMAP_NONE || gc_ == XCB_NONE) return;
 
-    std::copy(bg_strip_.pixels.begin(), bg_strip_.pixels.end(), canvas_.pixels.begin());
+    std::copy_n(bg_strip_.pixels.begin(),
+                std::min(bg_strip_.pixels.size(), canvas_.pixels.size()),
+                canvas_.pixels.begin());
 
     const float cy = static_cast<float>(height_) * 0.5f;
     const int baseline_y = static_cast<int>(height_ / 2 + 4);
