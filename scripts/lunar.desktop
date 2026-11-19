@@ -1,0 +1,6 @@
+[Desktop Entry]
+Name=Lunar DE
+Comment=Minimal, modular C++20 X11 Desktop Environment
+Exec=/usr/local/bin/lunar-session
+Type=Application
+DesktopNames=Lunar

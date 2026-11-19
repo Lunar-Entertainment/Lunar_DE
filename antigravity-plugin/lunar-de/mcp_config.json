@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "lunar-de": {
+      "command": "python3",
+      "args": [
+        "/home/lunar/.gemini/config/plugins/lunar-de/scripts/lunar_mcp.py"
+      ]
+    }
+  }
+}

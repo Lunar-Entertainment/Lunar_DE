@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+unset WAYLAND_DISPLAY
+export XDG_SESSION_TYPE=x11
+export XDG_CURRENT_DESKTOP=zorin:GNOME
+export GDK_BACKEND=x11
+export QT_QPA_PLATFORM=xcb
+export SDL_VIDEODRIVER=x11
+export CLUTTER_BACKEND=x11
+export ELECTRON_OZONE_PLATFORM_HINT=x11
+export GTK_USE_PORTAL=0
+export GIO_USE_VFS=local
+export NO_AT_BRIDGE=1
+export GTK_A11Y=none
+
+SHARE_DIR="/usr/local/share/lunar-de"
+PID_FILE="/tmp/lunar-de-pids.txt"
+: > "${PID_FILE}"
+
+if command -v systemctl >/dev/null 2>&1; then
+    systemctl --user unset-environment WAYLAND_DISPLAY 2>/dev/null || true
+    systemctl --user import-environment \
+        DISPLAY XAUTHORITY XDG_SESSION_TYPE XDG_CURRENT_DESKTOP GDK_BACKEND \
+        QT_QPA_PLATFORM GTK_USE_PORTAL GIO_USE_VFS NO_AT_BRIDGE GTK_A11Y \
+        2>/dev/null || true
+fi
+
+if command -v dbus-update-activation-environment >/dev/null 2>&1; then
+    dbus-update-activation-environment --systemd \
+        DISPLAY XAUTHORITY XDG_SESSION_TYPE XDG_CURRENT_DESKTOP GDK_BACKEND \
+        QT_QPA_PLATFORM SDL_VIDEODRIVER CLUTTER_BACKEND ELECTRON_OZONE_PLATFORM_HINT \
+        GTK_USE_PORTAL GIO_USE_VFS NO_AT_BRIDGE GTK_A11Y \
+        2>/dev/null || true
+fi
+
+CFG_DIR="${XDG_CONFIG_HOME:-${HOME}/.config}/lunar-de"
+if [[ -f "${CFG_DIR}/monitor_layout.sh" ]]; then
+    sh "${CFG_DIR}/monitor_layout.sh" 2>/dev/null || true
+fi
+
+if command -v picom >/dev/null 2>&1 && [[ -f "${SHARE_DIR}/config/picom.conf" ]]; then
+    if ! picom --config "${SHARE_DIR}/config/picom.conf" --backend glx --vsync </dev/null >/tmp/lunar-picom.log 2>&1 & then
+        picom --config "${SHARE_DIR}/config/picom.conf" </dev/null >/tmp/lunar-picom.log 2>&1 &
+    fi
+    echo "$!" >> "${PID_FILE}"
+fi
+
+if command -v python3 >/dev/null 2>&1 && [[ -f "${SHARE_DIR}/scripts/lunar_live.py" ]]; then
+    python3 "${SHARE_DIR}/scripts/lunar_live.py" </dev/null >/tmp/lunar-live.log 2>&1 &
+    echo "$!" >> "${PID_FILE}"
+fi
+
+/usr/local/bin/lunar-panel </dev/null >/tmp/lunar-panel.log 2>&1 &
+echo "$!" >> "${PID_FILE}"
+
+exec /usr/local/bin/lunar-wm >/tmp/lunar-wm.log 2>&1

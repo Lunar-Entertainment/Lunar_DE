@@ -1,0 +1,12 @@
+{
+  "name": "lunar-de",
+  "displayName": "Lunar DE PC Control",
+  "version": "1.0.0",
+  "description": "Control your Linux PC and Lunar DE from Antigravity: launch apps, manage windows, capture screenshots, adjust audio, switch wallpapers, and configure monitors or bar layouts.",
+  "logo": "assets/logo.svg",
+  "suggestedPrompts": [
+    "Take a screenshot of my desktop and tell me what's open",
+    "Switch my wallpaper to Cyber Synthwave and set volume to 50%",
+    "Launch Brave and snap it to the left half of my screen"
+  ]
+}
