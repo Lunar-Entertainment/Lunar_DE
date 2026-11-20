@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import ctypes
 import json
 import os
 import re
@@ -14,7 +15,7 @@ from pathlib import Path
 from typing import Any
 
 PROTOCOL_VERSION = "2024-11-05"
-SERVER_INFO = {"name": "lunar-de", "version": "1.0.0"}
+SERVER_INFO = {"name": "lunar-de", "version": "1.0.1"}
 
 TOOLS: list[dict[str, Any]] = [
     {
@@ -124,6 +125,25 @@ TOOLS: list[dict[str, Any]] = [
             },
         },
     },
+    {
+        "name": "gemini_live",
+        "description": "Inspect or control the Lunar DE Gemini Live voice assistant (status, start, stop, toggle, toggle_vision, or send_prompt).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["status", "start", "stop", "toggle", "toggle_vision", "send_prompt"],
+                    "description": "Action to perform on Gemini Live.",
+                },
+                "prompt": {
+                    "type": "string",
+                    "description": "Text prompt to send when action='send_prompt'.",
+                },
+            },
+            "required": ["action"],
+        },
+    },
 ]
 
 
@@ -150,6 +170,87 @@ def cfg_dir() -> Path:
     d = base / "lunar-de"
     d.mkdir(parents=True, exist_ok=True)
     return d
+
+
+class _XClientMessageData(ctypes.Union):
+    _fields_ = [("b", ctypes.c_char * 20), ("s", ctypes.c_short * 10), ("l", ctypes.c_long * 5)]
+
+
+class _XClientMessageEvent(ctypes.Structure):
+    _fields_ = [
+        ("type", ctypes.c_int),
+        ("serial", ctypes.c_ulong),
+        ("send_event", ctypes.c_int),
+        ("display", ctypes.c_void_p),
+        ("window", ctypes.c_ulong),
+        ("message_type", ctypes.c_ulong),
+        ("format", ctypes.c_int),
+        ("data", _XClientMessageData),
+    ]
+
+
+def _send_x11_client_message(
+    display: str,
+    target_win: int,
+    atom_name: str,
+    d0: int = 0,
+    d1: int = 0,
+    d2: int = 0,
+    propagate_to_root: bool = False,
+) -> bool:
+    try:
+        x11 = ctypes.cdll.LoadLibrary("libX11.so.6")
+        x11.XOpenDisplay.argtypes = [ctypes.c_char_p]
+        x11.XOpenDisplay.restype = ctypes.c_void_p
+        x11.XDefaultRootWindow.argtypes = [ctypes.c_void_p]
+        x11.XDefaultRootWindow.restype = ctypes.c_ulong
+        x11.XInternAtom.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_int]
+        x11.XInternAtom.restype = ctypes.c_ulong
+        x11.XSendEvent.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_ulong,
+            ctypes.c_int,
+            ctypes.c_long,
+            ctypes.c_void_p,
+        ]
+        x11.XSendEvent.restype = ctypes.c_int
+        x11.XFlush.argtypes = [ctypes.c_void_p]
+        x11.XFlush.restype = ctypes.c_int
+        x11.XCloseDisplay.argtypes = [ctypes.c_void_p]
+        x11.XCloseDisplay.restype = ctypes.c_int
+        dpy = x11.XOpenDisplay(display.encode("utf-8"))
+        if not dpy:
+            return False
+        try:
+            root = x11.XDefaultRootWindow(dpy)
+            win = root if target_win == 0 else target_win
+            atom = x11.XInternAtom(dpy, atom_name.encode("utf-8"), 0)
+            ev = _XClientMessageEvent()
+            ev.type = 33
+            ev.display = dpy
+            ev.window = win
+            ev.message_type = atom
+            ev.format = 32
+            ev.data.l[0] = d0
+            ev.data.l[1] = d1
+            ev.data.l[2] = d2
+            mask = ((1 << 20) | (1 << 19)) if propagate_to_root else 0
+            dest = root if propagate_to_root else win
+            x11.XSendEvent(dpy, dest, 0, mask, ctypes.byref(ev))
+            x11.XFlush(dpy)
+            return True
+        finally:
+            x11.XCloseDisplay(dpy)
+    except Exception:
+        return False
+
+
+def _get_panel_window(display: str) -> int:
+    rc, out, _ = run_cmd(["xprop", "-display", display, "-root", "_LUNAR_PANEL_WINDOW"], display=display)
+    if rc != 0 or "#" not in out:
+        return 0
+    m = re.search(r"0x[0-9a-fA-F]+", out.split("#", 1)[1])
+    return int(m.group(0), 16) if m else 0
 
 
 def handle_tool(name: str, args: dict[str, Any]) -> dict[str, Any]:
@@ -191,9 +292,10 @@ def handle_tool(name: str, args: dict[str, Any]) -> dict[str, Any]:
             return {"ok": False, "error": "Empty app name"}
         app_dirs = [
             Path.home() / ".local/share/applications",
+            Path("/usr/share/applications"),
             Path.home() / ".local/share/flatpak/exports/share/applications",
             Path("/var/lib/flatpak/exports/share/applications"),
-            Path("/usr/share/applications"),
+            Path("/var/lib/snapd/desktop/applications"),
         ]
         for d in app_dirs:
             if not d.exists():
@@ -202,22 +304,68 @@ def handle_tool(name: str, args: dict[str, Any]) -> dict[str, Any]:
                 txt = p.read_text(encoding="utf-8", errors="ignore")
                 app_name = ""
                 exec_cmd = ""
-                for line in txt.splitlines():
-                    if line.startswith("Name=") and not app_name:
-                        app_name = line.split("=", 1)[1].strip()
-                    elif line.startswith("Exec=") and not exec_cmd:
-                        exec_cmd = line.split("=", 1)[1].strip()
-                if query in app_name.lower() and exec_cmd:
+                no_display = False
+                hidden = False
+                in_main = False
+                for raw in txt.splitlines():
+                    line = raw.strip()
+                    if line.startswith("[") and line.endswith("]"):
+                        if line == "[Desktop Entry]":
+                            in_main = True
+                        elif in_main:
+                            break
+                        continue
+                    if not in_main or "=" not in line:
+                        continue
+                    k, v = line.split("=", 1)
+                    k, v = k.strip(), v.strip()
+                    if k == "Name" and not app_name:
+                        app_name = v
+                    elif k == "Exec" and not exec_cmd:
+                        exec_cmd = v
+                    elif k == "NoDisplay":
+                        no_display = v.lower() == "true"
+                    elif k == "Hidden":
+                        hidden = v.lower() == "true"
+                if no_display or hidden or not app_name or not exec_cmd:
+                    continue
+                if query in app_name.lower() or query in p.stem.lower():
                     for tok in ("--file-forwarding", "@@u", "@@", "%U", "%u", "%F", "%f"):
                         exec_cmd = exec_cmd.replace(tok, "")
+                    exec_cmd = exec_cmd.strip()
+                    if "flatpak run" in exec_cmd:
+                        extra = (
+                            f" --env=DISPLAY={disp}"
+                            " --env=GDK_BACKEND=x11 --env=QT_QPA_PLATFORM=xcb"
+                            " --env=ELECTRON_OZONE_PLATFORM_HINT=x11"
+                            " --env=NO_AT_BRIDGE=1 --env=GTK_A11Y=none"
+                            " --env=XDG_CURRENT_DESKTOP=Lunar"
+                            " --unset-env=WAYLAND_DISPLAY --unset-env=GTK_MODULES"
+                            " --unset-env=GTK3_MODULES --unset-env=QT_ACCESSIBILITY"
+                            " --unset-env=GIO_USE_VFS"
+                        )
+                        exec_cmd = exec_cmd.replace("flatpak run", f"flatpak run{extra}", 1)
                     env = os.environ.copy()
                     env["DISPLAY"] = disp
-                    env.pop("WAYLAND_DISPLAY", None)
+                    for var in (
+                        "WAYLAND_DISPLAY",
+                        "GTK_MODULES",
+                        "GTK3_MODULES",
+                        "QT_ACCESSIBILITY",
+                        "GIO_USE_VFS",
+                    ):
+                        env.pop(var, None)
                     env["GDK_BACKEND"] = "x11"
-                    env["XDG_CURRENT_DESKTOP"] = "zorin:GNOME"
+                    env["QT_QPA_PLATFORM"] = "xcb"
+                    env["ELECTRON_OZONE_PLATFORM_HINT"] = "x11"
+                    env["GTK_USE_PORTAL"] = "0"
+                    env["NO_AT_BRIDGE"] = "1"
+                    env["GTK_A11Y"] = "none"
+                    env["XDG_CURRENT_DESKTOP"] = "Lunar"
                     subprocess.Popen(
-                        ["/bin/sh", "-c", exec_cmd.strip()],
+                        ["/bin/sh", "-c", exec_cmd],
                         env=env,
+                        cwd=str(Path.home()),
                         stdin=subprocess.DEVNULL,
                         stdout=subprocess.DEVNULL,
                         stderr=subprocess.DEVNULL,
@@ -274,6 +422,7 @@ def handle_tool(name: str, args: dict[str, Any]) -> dict[str, Any]:
     if name == "set_wallpaper":
         query = str(args.get("query", "")).strip()
         wp_dirs = [
+            Path("/usr/share/lunar-de/assets/wallpapers"),
             Path("/usr/local/share/lunar-de/assets/wallpapers"),
             Path("/home/lunar/Lunar_DE/assets/wallpapers"),
             Path("/usr/share/backgrounds"),
@@ -287,13 +436,17 @@ def handle_tool(name: str, args: dict[str, Any]) -> dict[str, Any]:
             for p in sorted(d.iterdir()):
                 if p.is_file() and p.suffix.lower() in (".jpg", ".jpeg", ".png") and p.name not in seen:
                     seen.add(p.name)
-                    all_wps.append(p)
+                    all_wps.append(p.resolve())
         if query.lower() == "list":
-            return {"count": len(all_wps), "wallpapers": [p.name for p in all_wps[:50]]}
+            return {"ok": True, "count": len(all_wps), "wallpapers": [p.name for p in all_wps[:50]]}
         if query.upper() == "CYCLE_ALL":
             (cfg_dir() / "wallpaper").write_text("CYCLE_ALL\n", encoding="utf-8")
+            _send_x11_client_message(disp, 0, "_LUNAR_WM_ACTION", 2, propagate_to_root=True)
+            panel_win = _get_panel_window(disp)
+            if panel_win:
+                _send_x11_client_message(disp, panel_win, "_LUNAR_PANEL_ACTION", 6)
             return {"ok": True, "wallpaper": "CYCLE_ALL"}
-        matched = Path(query) if Path(query).exists() else None
+        matched = Path(query).resolve() if Path(query).exists() else None
         if not matched:
             q_low = query.lower().replace("_", " ")
             for p in all_wps:
@@ -302,6 +455,10 @@ def handle_tool(name: str, args: dict[str, Any]) -> dict[str, Any]:
                     break
         if matched:
             (cfg_dir() / "wallpaper").write_text(str(matched) + "\n", encoding="utf-8")
+            _send_x11_client_message(disp, 0, "_LUNAR_WM_ACTION", 2, propagate_to_root=True)
+            panel_win = _get_panel_window(disp)
+            if panel_win:
+                _send_x11_client_message(disp, panel_win, "_LUNAR_PANEL_ACTION", 6)
             return {"ok": True, "wallpaper": str(matched)}
         return {"ok": False, "error": f"No wallpaper matching '{query}'"}
 
@@ -323,6 +480,44 @@ def handle_tool(name: str, args: dict[str, Any]) -> dict[str, Any]:
         if args.get("text"):
             run_cmd(["xdotool", "type", "--delay", "20", str(args["text"])], display=disp)
         return {"ok": True, "display": disp}
+
+    if name == "gemini_live":
+        action = str(args.get("action", "status")).strip()
+        state_path = Path("/tmp/lunar-live-state.json")
+        cmd_path = Path("/tmp/lunar-live-cmd")
+
+        def _read_state() -> dict[str, Any]:
+            if state_path.exists():
+                try:
+                    return json.loads(state_path.read_text(encoding="utf-8"))
+                except Exception:
+                    pass
+            return {"status": "not_running"}
+
+        if action == "status":
+            return {"ok": True, "state": _read_state()}
+
+        cmd_map = {
+            "start": "start_live",
+            "stop": "stop_live",
+            "toggle": "toggle_live",
+            "toggle_vision": "toggle_vision",
+        }
+        if action in cmd_map:
+            with cmd_path.open("a", encoding="utf-8") as fh:
+                fh.write(cmd_map[action] + "\n")
+            return {"ok": True, "sent": cmd_map[action], "state": _read_state()}
+
+        if action == "send_prompt":
+            prompt_text = str(args.get("prompt", "")).strip()
+            if not prompt_text:
+                return {"ok": False, "error": "Missing 'prompt' for action='send_prompt'"}
+            single_line = " ".join(prompt_text.splitlines()).strip()
+            with cmd_path.open("a", encoding="utf-8") as fh:
+                fh.write(f"prompt:{single_line}\n")
+            return {"ok": True, "sent": "prompt", "prompt": single_line, "state": _read_state()}
+
+        return {"ok": False, "error": f"Unknown gemini_live action: {action}"}
 
     return {"ok": False, "error": f"Unknown tool: {name}"}
 

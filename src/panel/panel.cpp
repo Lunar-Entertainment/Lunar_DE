@@ -876,8 +876,8 @@ void Panel::open_popup(PopupKind kind, int16_t anchor_x, int16_t anchor_y) {
         update_filtered_wallpapers();
     } else if (kind == PopupKind::GeminiLive) {
         refresh_live_status();
-        popup_w_ = 360;
-        popup_h_ = 296;
+        popup_w_ = 380;
+        popup_h_ = 328;
         px = static_cast<int16_t>(panel_x_ + std::max<int>(10, static_cast<int>(width_) - popup_w_ - 12));
         py = is_bottom
                  ? static_cast<int16_t>(panel_y_ - popup_h_ - 8)
@@ -2349,14 +2349,20 @@ bool Panel::refresh_live_status() {
     next.status = extract_json_string(json, "status");
     if (next.status.empty()) next.status = "idle";
     next.wake_enabled = extract_json_bool(json, "wake_enabled", true);
+    next.vision_enabled = extract_json_bool(json, "vision_enabled", false);
     next.user_text = extract_json_string(json, "user_text");
     next.model_text = extract_json_string(json, "model_text");
+    next.agy_status = extract_json_string(json, "agy_status");
+    next.active_tool = extract_json_string(json, "active_tool");
     next.error = extract_json_string(json, "error");
 
     const bool changed = (next.status != live_status_.status ||
                           next.wake_enabled != live_status_.wake_enabled ||
+                          next.vision_enabled != live_status_.vision_enabled ||
                           next.user_text != live_status_.user_text ||
                           next.model_text != live_status_.model_text ||
+                          next.agy_status != live_status_.agy_status ||
+                          next.active_tool != live_status_.active_tool ||
                           next.error != live_status_.error);
     live_status_ = std::move(next);
     return changed;
@@ -2403,20 +2409,26 @@ void Panel::handle_gemini_live_click(int16_t x, int16_t y, uint8_t button) {
         return;
     }
 
-    // Start/Stop Live button: x=[16, 344], y=[64, 98]
-    if (x >= 16 && x <= 344 && y >= 64 && y <= 98) {
+    // Start/Stop Live button: x=[16, 238], y=[64, 98]
+    if (x >= 16 && x <= 238 && y >= 64 && y <= 98) {
         send_live_command("toggle_live");
         return;
     }
 
-    // API key input box: x=[16, 266], y=[244, 276]
-    if (x >= 16 && x <= 266 && y >= 244 && y <= 276) {
+    // Screen Vision toggle button: x=[246, 364], y=[64, 98]
+    if (x >= 246 && x <= 364 && y >= 64 && y <= 98) {
+        send_live_command("toggle_vision");
+        return;
+    }
+
+    // API key input box: x=[16, 284], y=[274, 306]
+    if (x >= 16 && x <= 284 && y >= 274 && y <= 306) {
         editing_api_key_ = true;
         return;
     }
 
-    // Save button: x=[274, 344], y=[244, 276]
-    if (x >= 274 && x <= 344 && y >= 244 && y <= 276) {
+    // Save button: x=[292, 364], y=[274, 306]
+    if (x >= 292 && x <= 364 && y >= 274 && y <= 306) {
         if (!api_key_input_.empty()) {
             save_gemini_api_key(api_key_input_);
         } else {
@@ -2465,36 +2477,60 @@ void Panel::draw_gemini_live() {
     draw_line_aa(popup_canvas_, static_cast<float>(popup_w_ - 18), 18.0f,
                  static_cast<float>(popup_w_ - 26), 26.0f, 1.5f, 0xcbd5e1, 0.9f);
 
-    // Action button (full-width Start / Stop Live)
+    // Action row: Start/Stop Live (left) + Screen Vision toggle (right)
     const bool is_live = (live_status_.status == "live" ||
                           live_status_.status == "connecting" ||
                           live_status_.status == "speaking");
-    fill_rounded_rect_aa(popup_canvas_, 16.0f, 64.0f, 328.0f, 34.0f, 8.0f,
+    fill_rounded_rect_aa(popup_canvas_, 16.0f, 64.0f, 222.0f, 34.0f, 8.0f,
                          is_live ? 0xef4444 : 0x2563eb, 0.92f);
-    f_bold.draw_text(popup_canvas_, is_live ? 148 : 146, 86,
-                     is_live ? "Stop Live" : "Start Live", 12, 0xffffff);
+    const std::string live_btn_label = is_live ? "Stop Live" : "Start Live";
+    const int live_tw = f_bold.measure_text(live_btn_label, 12);
+    f_bold.draw_text(popup_canvas_, 16 + std::max(8, (222 - live_tw) / 2), 86,
+                     live_btn_label, 12, 0xffffff);
 
-    // Transcript box
-    fill_rounded_rect_aa(popup_canvas_, 16.0f, 110.0f, 328.0f, 104.0f, 8.0f, 0x10141c, 1.0f);
-    stroke_rounded_rect_aa(popup_canvas_, 16.5f, 110.5f, 327.0f, 103.0f, 8.0f, 1.0f, 0x283244, 0.9f);
+    const bool vis_on = live_status_.vision_enabled;
+    fill_rounded_rect_aa(popup_canvas_, 246.0f, 64.0f, 118.0f, 34.0f, 8.0f,
+                         vis_on ? 0x059669 : 0x232936, 0.95f);
+    stroke_rounded_rect_aa(popup_canvas_, 246.5f, 64.5f, 117.0f, 33.0f, 8.0f, 1.0f,
+                           vis_on ? 0x34d399 : 0x334155, 0.9f);
+    const std::string vis_label = vis_on ? "Screen: ON" : "Screen: OFF";
+    const int vis_tw = f_bold.measure_text(vis_label, 11);
+    f_bold.draw_text(popup_canvas_, 246 + std::max(6, (118 - vis_tw) / 2), 85,
+                     vis_label, 11, vis_on ? 0xffffff : 0xcbd5e1);
+
+    // Transcript + Activity box
+    fill_rounded_rect_aa(popup_canvas_, 16.0f, 108.0f, 348.0f, 136.0f, 8.0f, 0x10141c, 1.0f);
+    stroke_rounded_rect_aa(popup_canvas_, 16.5f, 108.5f, 347.0f, 135.0f, 8.0f, 1.0f, 0x283244, 0.9f);
 
     const std::string you_line = live_status_.user_text.empty()
         ? "Click Start Live to talk with Gemini."
-        : "You: " + clip_text(live_status_.user_text, 44);
+        : "You: " + clip_text(live_status_.user_text, 46);
     const std::string lunar_line = live_status_.model_text.empty()
         ? "Shortcut: Super + G"
-        : "Lunar: " + clip_text(live_status_.model_text, 42);
+        : "Lunar: " + clip_text(live_status_.model_text, 44);
 
-    f_reg.draw_text(popup_canvas_, 26, 134, you_line, 11, 0xcbd5e1);
-    f_reg.draw_text(popup_canvas_, 26, 158, lunar_line, 11, 0x93c5fd);
+    f_reg.draw_text(popup_canvas_, 26, 130, you_line, 11, 0xcbd5e1);
+    f_reg.draw_text(popup_canvas_, 26, 154, lunar_line, 11, 0x93c5fd);
+
+    std::string activity_line = "Tools + Screen Vision + AGY ready";
+    uint32_t activity_col = 0x64748b;
+    if (!live_status_.active_tool.empty()) {
+        activity_line = "Tool: " + clip_text(live_status_.active_tool, 40);
+        activity_col = 0x34d399;
+    } else if (!live_status_.agy_status.empty()) {
+        activity_line = clip_text(live_status_.agy_status, 44);
+        activity_col = 0x38bdf8;
+    }
+    f_reg.draw_text(popup_canvas_, 26, 184, activity_line, 11, activity_col);
+
     if (!live_status_.error.empty()) {
-        f_reg.draw_text(popup_canvas_, 26, 198, clip_text(live_status_.error, 46), 10, 0xfbbf24);
+        f_reg.draw_text(popup_canvas_, 26, 214, clip_text(live_status_.error, 46), 10, 0xfbbf24);
     }
 
     // API Key entry row
-    f_reg.draw_text(popup_canvas_, 16, 236, "Gemini API Key (saved locally):", 11, 0x94a3b8);
-    fill_rounded_rect_aa(popup_canvas_, 16.0f, 244.0f, 250.0f, 32.0f, 7.0f, 0x222834, 1.0f);
-    stroke_rounded_rect_aa(popup_canvas_, 16.5f, 244.5f, 249.0f, 31.0f, 7.0f, 1.0f,
+    f_reg.draw_text(popup_canvas_, 16, 266, "Gemini API Key (saved locally):", 11, 0x94a3b8);
+    fill_rounded_rect_aa(popup_canvas_, 16.0f, 274.0f, 268.0f, 32.0f, 7.0f, 0x222834, 1.0f);
+    stroke_rounded_rect_aa(popup_canvas_, 16.5f, 274.5f, 267.0f, 31.0f, 7.0f, 1.0f,
                            editing_api_key_ ? 0x38bdf8 : 0x334155, 0.95f);
 
     std::string key_display;
@@ -2506,11 +2542,12 @@ void Panel::draw_gemini_live() {
         key_display = std::string(std::min<size_t>(14, n > 4 ? n - 4 : 0), '*') + tail;
         if (editing_api_key_) key_display.push_back('|');
     }
-    f_reg.draw_text(popup_canvas_, 26, 265, key_display, 11,
+    f_reg.draw_text(popup_canvas_, 26, 295, key_display, 11,
                     api_key_input_.empty() ? 0x64748b : 0xf1f5f9);
 
-    fill_rounded_rect_aa(popup_canvas_, 274.0f, 244.0f, 70.0f, 32.0f, 7.0f, 0x334155, 1.0f);
-    f_bold.draw_text(popup_canvas_, 294, 265, "Save", 11, 0xf8fafc);
+    fill_rounded_rect_aa(popup_canvas_, 292.0f, 274.0f, 72.0f, 32.0f, 7.0f, 0x334155, 1.0f);
+    const int save_tw = f_bold.measure_text("Save", 11);
+    f_bold.draw_text(popup_canvas_, 292 + std::max(6, (72 - save_tw) / 2), 295, "Save", 11, 0xf8fafc);
 }
 
 namespace {

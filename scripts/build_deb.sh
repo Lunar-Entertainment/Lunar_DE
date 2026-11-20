@@ -110,7 +110,7 @@ Installed-Size: ${INSTALLED_KB}
 Maintainer: Lunar Entertainment <lunar@users.noreply.github.com>
 Homepage: https://lunar-entertainment.github.io/Lunar_DE/
 Depends: libc6, libstdc++6, libxcb1, libxcb-util1, libxcb-ewmh2, libxcb-icccm4, libxcb-keysyms1, libxcb-randr0, libxkbcommon0, libjpeg-turbo8 | libjpeg8, libpng16-16t64 | libpng16-16, libfontconfig1, libfreetype6, picom, python3, python3-gi, python3-gi-cairo, gir1.2-gtk-3.0, x11-xserver-utils, xdotool, pulseaudio-utils
-Recommends: python3-websockets, ffmpeg
+Recommends: python3-websockets, ffmpeg, wmctrl, xclip
 Description: Minimal modular C++20 X11 Desktop Environment
  Lunar DE is built from scratch in C++20 directly on libxcb, featuring
  multi-monitor RandR support, Aero Snap, Top Bar & Windows 11 Taskbar

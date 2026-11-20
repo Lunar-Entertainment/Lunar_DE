@@ -146,6 +146,30 @@ NEW_PANEL_PID=$!
 
 if [[ "${LUNAR_XEPHYR:-0}" != "1" ]]; then
     echo "${NEW_PANEL_PID}" >> /tmp/lunar-de-pids.txt
+
+    LIVE_SCRIPT=""
+    for cand in \
+        "${BIN_DIR}/../share/lunar-de/scripts/lunar_live.py" \
+        "/usr/share/lunar-de/scripts/lunar_live.py" \
+        "/usr/local/share/lunar-de/scripts/lunar_live.py" \
+        "${SCRIPT_DIR}/lunar_live.py"
+    do
+        if [[ -f "${cand}" ]]; then
+            LIVE_SCRIPT="${cand}"
+            break
+        fi
+    done
+
+    if [[ -n "${LIVE_SCRIPT}" ]] && command -v python3 >/dev/null 2>&1; then
+        echo "Restarting lunar_live daemon: ${LIVE_SCRIPT}"
+        pkill -TERM -f '[l]unar_live.py' 2>/dev/null || true
+        for _ in 1 2 3 4 5 6 7 8 9 10; do
+            pgrep -f '[l]unar_live.py' >/dev/null 2>&1 || break
+            sleep 0.1
+        done
+        python3 "${LIVE_SCRIPT}" </dev/null >/tmp/lunar-live.log 2>&1 &
+        echo "$!" >> /tmp/lunar-de-pids.txt
+    fi
 fi
 
 echo "Restart complete (new lunar-panel PID ${NEW_PANEL_PID})"

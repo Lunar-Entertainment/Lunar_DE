@@ -42,8 +42,11 @@ private:
     struct LiveStatus {
         std::string status = "listening"; // needs_key, listening, connecting, live, speaking, paused, error
         bool wake_enabled = true;
+        bool vision_enabled = false;
         std::string user_text;
         std::string model_text;
+        std::string agy_status;
+        std::string active_tool;
         std::string error;
     };
 

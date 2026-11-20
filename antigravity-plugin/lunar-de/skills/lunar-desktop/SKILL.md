@@ -18,6 +18,7 @@ Use the `lunar-de` MCP server tools whenever the user asks to control or inspect
 - `set_wallpaper`: List wallpapers, switch to a wallpaper by keyword, or enable `CYCLE_ALL` auto-rotation.
 - `set_bar_layout`: Switch Lunar DE between `top` (Top Bar), `taskbar` (Bottom Taskbar), and `taskbar-top` (Top Taskbar).
 - `send_input`: Send key presses or mouse clicks via `xdotool` when explicitly requested by the user.
+- `gemini_live`: Inspect status or control the built-in Gemini Live voice assistant (`status`, `start`, `stop`, `toggle`, `toggle_vision`, or `send_prompt` with a `prompt`).
 
 ## Guidelines
 
