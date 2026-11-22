@@ -152,6 +152,34 @@ Description: Minimal modular C++20 X11 Desktop Environment
  Gemini Live voice integration, and boot auto-updates.
 
 Package: lunar-de
+Version: 1.0.18
+Architecture: amd64
+Maintainer: Lunar Entertainment <lunar@users.noreply.github.com>
+Installed-Size: 2520
+Depends: libc6, libstdc++6, libxcb1, libxcb-util1, libxcb-ewmh2, libxcb-icccm4, libxcb-keysyms1, libxcb-randr0, libxkbcommon0, libjpeg-turbo8 | libjpeg8, libpng16-16t64 | libpng16-16, libfontconfig1, libfreetype6, picom, python3, python3-gi, python3-gi-cairo, gir1.2-gtk-3.0, x11-xserver-utils, xdotool, pulseaudio-utils, lunar-de-wallpapers-1 (>= 1.0.12), lunar-de-wallpapers-2 (>= 1.0.12), lunar-de-wallpapers-3 (>= 1.0.12)
+Recommends: python3-websockets, ffmpeg, wmctrl, xclip, xinput, mpv, gir1.2-webkit2-4.1 | gir1.2-webkit2-4.0
+Filename: pool/main/lunar-de_1.0.18_amd64.deb
+Size: 803934
+MD5sum: 8e5e735eee8081523d92f6ab87edb242
+SHA1: e6c7bbacb40e02c31644f515d691a9cf398f0e23
+SHA256: 510d4259cc4892136268c0c73d6c8fb1b8754fcc94134574d2f3c4feaf554516
+Section: x11
+Priority: optional
+Homepage: https://lunar-entertainment.github.io/Lunar_DE/
+Description: Minimal modular C++20 X11 Desktop Environment
+ Lunar DE is built from scratch in C++20 directly on libxcb, featuring
+ multi-monitor RandR support, Aero Snap, 6 panel & dock layouts with merged
+ draggable taskbar icons, Allow Apps Over Taskbar mode with edge reveal,
+ draggable & rubber-band multi-selectable desktop icons with Desktop folder
+ and file management, Background Apps viewer & quick closer, Lunar Settings
+ with toggleable window borders & titlebars and configurable shortcuts, Alt+F2
+ Command Palette with area screenshot & screen recording, targeted background
+ window automation (lunar-win), desktop clock widget, 48 bundled lossless 2K
+ PNG wallpapers with smooth cross-fades, built-in live wallpaper service (16
+ bundled + custom HTML/MP4/video), Gemini Live voice integration
+ (Super+Shift+G), and boot auto-updates.
+
+Package: lunar-de
 Version: 1.0.2
 Architecture: amd64
 Maintainer: Lunar Entertainment <lunar@users.noreply.github.com>
