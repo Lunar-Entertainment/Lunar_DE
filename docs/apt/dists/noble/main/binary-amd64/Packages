@@ -232,14 +232,14 @@ Package: lunar-de
 Version: 1.0.20
 Architecture: amd64
 Maintainer: Lunar Entertainment <lunar@users.noreply.github.com>
-Installed-Size: 3148
+Installed-Size: 3164
 Depends: libc6, libstdc++6, libxcb1, libxcb-util1, libxcb-ewmh2, libxcb-icccm4, libxcb-keysyms1, libxcb-randr0, libxkbcommon0, libjpeg-turbo8 | libjpeg8, libpng16-16t64 | libpng16-16, libfontconfig1, libfreetype6, picom, python3, python3-gi, python3-gi-cairo, gir1.2-gtk-3.0, x11-xserver-utils, xdotool, pulseaudio-utils, lunar-de-wallpapers-1 (>= 1.0.12), lunar-de-wallpapers-2 (>= 1.0.12), lunar-de-wallpapers-3 (>= 1.0.12)
 Recommends: python3-websockets, ffmpeg, wmctrl, xclip, xinput, mpv, gir1.2-webkit2-4.1 | gir1.2-webkit2-4.0, gir1.2-vte-2.91, xserver-xephyr
 Filename: pool/main/lunar-de_1.0.20_amd64.deb
-Size: 1002206
-MD5sum: 2b8d33b101bbcbecfb0e537c049f70e7
-SHA1: 849a3bce5cad4e509747d7e52ee27f4294e0c747
-SHA256: 8422fd53d91f6805f060f42651384daac6ae7b346a049b3ac49a313b8f66f461
+Size: 1005754
+MD5sum: 68ab74e82c0f563a1990c33d5bb3281c
+SHA1: 8628d4207d3b58fe0b863f3fb50646024e0756d7
+SHA256: 9e00baabc933076071ca190481734ab56efa6352185bfc606cfb55ec9f256933
 Section: x11
 Priority: optional
 Homepage: https://lunar-entertainment.github.io/Lunar_DE/
