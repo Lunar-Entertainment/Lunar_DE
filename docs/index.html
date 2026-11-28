@@ -1,1273 +1,1203 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Lunar DE — Modular C++20 X11 Desktop Environment</title>
-  <style>
-    :root {
-      --bg: #0b101b;
-      --surface: #131a29;
-      --surface-2: #1a2336;
-      --border: rgba(148, 163, 184, 0.16);
-      --accent: #38bdf8;
-      --accent-2: #818cf8;
-      --emerald: #34d399;
-      --text: #f1f5f9;
-      --muted: #94a3b8;
-    }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
-      background: radial-gradient(circle at 20% 0%, #162442 0%, var(--bg) 55%);
-      color: var(--text);
-      line-height: 1.6;
-      min-height: 100vh;
-    }
-    a { color: var(--accent); text-decoration: none; }
-    a:hover { text-decoration: underline; }
-    .container { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lunar DE v1.0.25 — Modular C++20 X11 Desktop, Workspaces, Alt+Tab &amp; 40 Live Wallpapers</title>
+<meta name="description" content="Lunar DE v1.0.25: Native C++20 libxcb X11 window manager with 4 EWMH virtual workspaces, visual glass Alt+Tab window switcher, workspace pills, D-Bus lunar-notify &amp; Notification Center, 40 WebGL/Canvas2D live wallpapers, and Lunar DE Connect Android companion.">
+<style>
+  :root {
+    --bg: #070b14;
+    --bg-elev: #0e1422;
+    --bg-card: #121a2c;
+    --border: rgba(148, 163, 184, 0.16);
+    --text: #f1f5f9;
+    --muted: #94a3b8;
+    --accent: #38bdf8;
+    --accent-2: #818cf8;
+    --emerald: #10b981;
+    --pink: #ec4899;
+    --amber: #f59e0b;
+    --radius: 14px;
+    --font: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --mono: "JetBrains Mono", "Fira Code", ui-monospace, SFMono-Regular, monospace;
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  html { scroll-behavior: smooth; overflow-x: hidden; }
+  body {
+    margin: 0;
+    padding: 0;
+    background: radial-gradient(circle at 20% 0%, #101c38 0%, var(--bg) 52%);
+    color: var(--text);
+    font-family: var(--font);
+    line-height: 1.55;
+    overflow-x: hidden;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  button { font-family: inherit; cursor: pointer; }
+  .container { width: 100%; max-width: 1240px; margin: 0 auto; padding: 0 20px; }
 
-    /* Nav */
-    nav {
-      position: sticky; top: 0; z-index: 50;
-      backdrop-filter: blur(14px);
-      background: rgba(11, 16, 27, 0.78);
-      border-bottom: 1px solid var(--border);
-    }
-    .nav-inner {
-      display: flex; align-items: center; justify-content: space-between;
-      height: 60px;
-    }
-    .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 1.05rem; color: var(--text); }
-    .nav-links { display: flex; gap: 22px; font-size: 0.92rem; }
-    .nav-links a { color: var(--muted); }
-    .nav-links a:hover { color: var(--text); text-decoration: none; }
+  /* Header & Mobile Hamburger */
+  header.nav-bar {
+    position: sticky; top: 0; z-index: 60;
+    backdrop-filter: blur(14px);
+    background: rgba(7, 11, 20, 0.86);
+    border-bottom: 1px solid var(--border);
+  }
+  .nav-inner {
+    display: flex; align-items: center; justify-content: space-between;
+    height: 64px; gap: 16px;
+  }
+  .brand {
+    display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 18px; color: #fff;
+  }
+  .brand-orb {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: radial-gradient(circle at 30% 30%, #38bdf8, #4f46e5);
+    box-shadow: 0 0 18px rgba(56, 189, 248, 0.55);
+  }
+  .version-pill {
+    font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 99px;
+    background: rgba(56, 189, 248, 0.16); color: var(--accent); border: 1px solid rgba(56, 189, 248, 0.35);
+  }
+  nav.nav-links { display: flex; align-items: center; gap: 20px; font-size: 14px; }
+  nav.nav-links a { color: var(--muted); font-weight: 500; transition: color 0.15s; }
+  nav.nav-links a:hover { color: #fff; }
+  .hamburger {
+    display: none; background: var(--bg-card); color: #fff; border: 1px solid var(--border);
+    border-radius: 10px; width: 44px; height: 44px; align-items: center; justify-content: center; font-size: 20px;
+  }
+  .mobile-drawer {
+    display: none; flex-direction: column; gap: 8px; padding: 12px 20px 18px;
+    background: #0b1120; border-bottom: 1px solid var(--border);
+  }
+  .mobile-drawer.open { display: flex; }
+  .mobile-drawer a { padding: 10px 12px; border-radius: 8px; background: rgba(255,255,255,0.03); color: #e2e8f0; }
 
-    /* Hero */
-    .hero { padding: 64px 0 56px; text-align: center; }
-    .pill-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-bottom: 20px; }
-    .pill {
-      font-size: 0.78rem; font-weight: 600; letter-spacing: 0.02em;
-      padding: 4px 12px; border-radius: 999px;
-      background: rgba(56, 189, 248, 0.12);
-      border: 1px solid rgba(56, 189, 248, 0.3);
-      color: #bae6fd;
-    }
-    h1 {
-      font-size: clamp(2.3rem, 5vw, 3.7rem);
-      line-height: 1.1; font-weight: 800; letter-spacing: -0.03em;
-      background: linear-gradient(135deg, #ffffff 30%, #7dd3fc 70%, #a5b4fc 100%);
-      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-      margin-bottom: 18px;
-    }
-    .subtitle {
-      max-width: 700px; margin: 0 auto 28px;
-      color: var(--muted); font-size: 1.08rem;
-    }
-    .cta-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 14px; margin-bottom: 40px; }
-    .btn {
-      display: inline-flex; align-items: center; gap: 8px;
-      padding: 12px 22px; border-radius: 10px; font-weight: 600; font-size: 0.95rem;
-      transition: transform 0.15s ease, box-shadow 0.15s ease;
-    }
-    .btn:hover { transform: translateY(-1px); text-decoration: none; }
-    .btn-primary {
-      background: linear-gradient(135deg, #2563eb, #0284c7);
-      color: #fff; box-shadow: 0 8px 24px rgba(37, 99, 235, 0.35);
-    }
-    .btn-ghost {
-      background: var(--surface); color: var(--text);
-      border: 1px solid var(--border);
-    }
+  /* Hero */
+  .hero { padding: 54px 0 36px; text-align: center; }
+  .hero h1 {
+    font-size: clamp(2rem, 5vw, 3.6rem); line-height: 1.1; margin: 14px auto; max-width: 880px;
+    letter-spacing: -0.025em;
+  }
+  .grad-text {
+    background: linear-gradient(110deg, #f8fafc 10%, #38bdf8 55%, #a78bfa 95%);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .hero p { max-width: 720px; margin: 0 auto 24px; color: var(--muted); font-size: clamp(1rem, 2vw, 1.12rem); }
+  .hero-cta { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }
+  .btn-primary {
+    background: linear-gradient(135deg, #0284c7, #4f46e5); color: #fff; border: none;
+    padding: 12px 22px; border-radius: 10px; font-weight: 700; min-height: 44px;
+    box-shadow: 0 8px 24px rgba(2, 132, 199, 0.32);
+  }
+  .btn-secondary {
+    background: var(--bg-card); color: var(--text); border: 1px solid var(--border);
+    padding: 12px 20px; border-radius: 10px; font-weight: 600; min-height: 44px;
+  }
+  .stat-row {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 30px;
+  }
+  .stat-box {
+    background: rgba(18, 26, 44, 0.72); border: 1px solid var(--border); border-radius: 12px; padding: 14px;
+  }
+  .stat-box strong { display: block; font-size: 1.35rem; color: #fff; }
+  .stat-box span { font-size: 12px; color: var(--muted); }
 
-    /* Interactive Mini-VM Shell */
-    .preview-shell {
-      max-width: 960px; margin: 0 auto;
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: 18px; padding: 14px; box-shadow: 0 24px 64px rgba(0,0,0,0.48);
-    }
-    .preview-controls {
-      display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;
-      margin-bottom: 12px; font-size: 0.84rem; color: var(--muted); text-align: left;
-    }
-    .toggle-group { display: flex; gap: 6px; background: var(--bg); padding: 4px; border-radius: 10px; }
-    .toggle-btn {
-      border: none; background: transparent; color: var(--muted); cursor: pointer;
-      padding: 6px 14px; border-radius: 7px; font-weight: 600; font-size: 0.82rem;
-    }
-    .toggle-btn.active { background: #2563eb; color: #fff; }
+  /* Sections */
+  section { padding: 48px 0; }
+  .sec-head { margin-bottom: 22px; }
+  .sec-head h2 { font-size: clamp(1.5rem, 3vw, 2.2rem); margin: 0 0 6px; }
+  .sec-head p { color: var(--muted); margin: 0; max-width: 760px; }
 
-    .desktop-canvas {
-      position: relative; width: 100%; aspect-ratio: 16/9; min-height: 440px;
-      border-radius: 12px; overflow: hidden; user-select: none;
-      background: url('assets/01_lunar_eclipse.jpg') center/cover no-repeat;
-      transition: background-image 0.35s ease;
-      border: 1px solid rgba(255,255,255,0.12);
-      text-align: left;
-    }
+  /* VM Studio + Android Connect Split */
+  .studio-shell {
+    background: var(--bg-elev); border: 1px solid var(--border); border-radius: 18px; padding: 16px;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+  }
+  .vm-tabs-bar {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px;
+    padding-bottom: 12px; border-bottom: 1px solid var(--border);
+  }
+  .vm-tab {
+    display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; min-height: 40px;
+    border-radius: 10px; background: var(--bg-card); color: var(--muted); border: 1px solid var(--border);
+    font-size: 13px; font-weight: 600;
+  }
+  .vm-tab.active { background: rgba(56, 189, 248, 0.16); color: #fff; border-color: var(--accent); }
+  .vm-tab-close { font-weight: 800; color: #94a3b8; padding: 0 4px; }
+  .vm-toolbar {
+    display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; margin-bottom: 12px;
+  }
+  .ctrl-group { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .chip-btn {
+    padding: 7px 12px; min-height: 36px; border-radius: 8px; font-size: 12px; font-weight: 600;
+    background: var(--bg-card); color: #cbd5e1; border: 1px solid var(--border);
+  }
+  .chip-btn.active { background: var(--accent); color: #050a14; border-color: var(--accent); }
 
-    /* Desktop Icons inside Mini-VM */
-    .vm-desktop-icons {
-      position: absolute; left: 14px; top: 44px; display: flex; flex-direction: column; gap: 10px;
-      z-index: 2; transition: top 0.2s ease;
-    }
-    .desktop-canvas.mode-taskbar .vm-desktop-icons { top: 18px; }
-    .vm-dicon {
-      width: 74px; padding: 8px 4px; border-radius: 10px; border: 1px solid transparent;
-      display: flex; flex-direction: column; align-items: center; gap: 5px;
-      cursor: pointer; background: transparent; color: #f8fafc; font-size: 0.72rem;
-      text-shadow: 0 1px 3px rgba(0,0,0,0.85);
-    }
-    .vm-dicon:hover { background: rgba(255,255,255,0.08); }
-    .vm-dicon.selected { background: rgba(37,99,235,0.32); border-color: rgba(56,189,248,0.75); }
-    .vm-dicon-glyph {
-      width: 38px; height: 38px; border-radius: 10px;
-      display: flex; align-items: center; justify-content: center;
-      font-family: ui-monospace, monospace; font-weight: 700; font-size: 0.9rem;
-      background: rgba(15, 23, 42, 0.78); border: 1px solid rgba(255,255,255,0.16);
-      box-shadow: 0 6px 14px rgba(0,0,0,0.35);
-    }
+  .studio-grid {
+    display: grid; grid-template-columns: minmax(0, 1fr) 310px; gap: 16px; align-items: stretch;
+  }
 
-    /* Snap Preview Overlay */
-    .vm-snap-preview {
-      position: absolute; pointer-events: none; z-index: 9;
-      background: rgba(30, 58, 95, 0.55); border: 2px solid #38bdf8;
-      border-radius: 12px; opacity: 0; transition: opacity 0.12s ease, all 0.12s ease;
-      box-shadow: 0 0 24px rgba(56, 189, 248, 0.25);
-    }
-    .vm-snap-preview.visible { opacity: 1; }
+  /* Interactive Desktop VM Canvas */
+  .vm-screen {
+    position: relative; min-height: 520px; border-radius: 14px; overflow: hidden;
+    border: 1px solid rgba(148, 163, 184, 0.25); background: #040812;
+  }
+  .vm-mon-split { display: grid; grid-template-columns: 1fr; width: 100%; height: 100%; min-height: 520px; }
+  .vm-mon-split.dual { grid-template-columns: 1fr 1fr; gap: 2px; background: #1e293b; }
+  .vm-monitor { position: relative; overflow: hidden; min-height: 520px; }
+  canvas.vm-wp-canvas {
+    position: absolute; inset: 0; width: 100%; height: 100%; display: block;
+  }
+  .pause-pill {
+    position: absolute; top: 44px; right: 10px; z-index: 8; font-size: 11px; font-weight: 700;
+    padding: 3px 9px; border-radius: 99px; background: rgba(15, 23, 42, 0.84);
+    border: 1px solid var(--border); color: var(--emerald);
+  }
+  .pause-pill.paused { color: var(--amber); border-color: var(--amber); }
 
-    /* Draggable/Resizable Windows */
-    .vm-window {
-      position: absolute; display: flex; flex-direction: column;
-      background: rgba(18, 22, 31, 0.96);
-      border-radius: 11px; border: 2px solid #334155;
-      box-shadow: 0 18px 46px rgba(0,0,0,0.55);
-      overflow: hidden; min-width: 270px; min-height: 170px;
-    }
-    .vm-window.focused { border-color: #38bdf8; box-shadow: 0 20px 52px rgba(0,0,0,0.68); }
-    .vm-window.maximized { border-radius: 0; border-width: 1px; }
-    .vm-window.hidden { display: none; }
+  /* Taskbar inside VM */
+  .vm-panel {
+    position: absolute; left: 0; right: 0; z-index: 15; display: flex; align-items: center;
+    justify-content: space-between; gap: 8px; padding: 0 12px; height: 36px;
+    background: rgba(11, 16, 27, 0.88); border-bottom: 1px solid rgba(255,255,255,0.12);
+    transition: all 0.2s; font-size: 12px;
+  }
+  .vm-panel.glass { backdrop-filter: blur(14px); background: rgba(11, 16, 27, 0.62); }
+  .vm-panel.top { top: 0; }
+  .vm-panel.bottom { top: auto; bottom: 0; border-bottom: none; border-top: 1px solid rgba(255,255,255,0.12); }
+  .vm-panel.dock {
+    top: auto; bottom: 10px; left: 50%; right: auto; transform: translateX(-50%);
+    width: min(92%, 520px); border-radius: 14px; border: 1px solid rgba(255,255,255,0.18); height: 42px;
+  }
+  .vm-panel.centered { justify-content: center; gap: 16px; }
 
-    .vm-titlebar {
-      height: 29px; flex: 0 0 29px; background: #1e293b;
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 0 10px; font-size: 0.76rem; color: #e2e8f0; cursor: grab;
-      border-bottom: 1px solid rgba(255,255,255,0.06);
-    }
-    .vm-titlebar:active { cursor: grabbing; }
-    .vm-title-text { font-weight: 600; pointer-events: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .vm-win-btns { display: flex; align-items: center; gap: 6px; }
-    .vm-win-btn {
-      width: 20px; height: 20px; border-radius: 50%; border: none;
-      display: inline-flex; align-items: center; justify-content: center;
-      font-size: 0.7rem; line-height: 1; cursor: pointer;
-      background: rgba(255,255,255,0.08); color: #cbd5e1;
-      transition: background 0.12s ease, color 0.12s ease;
-    }
-    .vm-win-btn:hover { background: rgba(255,255,255,0.2); color: #fff; }
-    .vm-win-btn.close:hover { background: #ef4444; color: #fff; }
+  /* VM Desktop Icons & Windows */
+  .vm-icons {
+    position: absolute; top: 48px; left: 14px; z-index: 5; display: flex; flex-direction: column; gap: 10px;
+  }
+  .vm-dicon {
+    width: 72px; text-align: center; font-size: 11px; color: #e2e8f0; padding: 6px 4px;
+    border-radius: 8px; background: rgba(9, 13, 24, 0.35); border: 1px solid transparent; cursor: pointer;
+  }
+  .vm-dicon:hover { border-color: var(--accent); background: rgba(56, 189, 248, 0.16); }
+  .vm-win {
+    position: absolute; z-index: 10; border-radius: 10px; overflow: hidden;
+    border: 1px solid rgba(56, 189, 248, 0.45); background: rgba(14, 20, 34, 0.94);
+    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.55); display: flex; flex-direction: column;
+  }
+  .vm-win.bg-dim { opacity: 0.90; border-color: rgba(148, 163, 184, 0.28); }
+  .vm-win-bar {
+    height: 30px; background: rgba(20, 27, 45, 0.95); padding: 0 10px;
+    display: flex; align-items: center; justify-content: space-between; font-size: 12px; font-weight: 600;
+    border-bottom: 1px solid var(--border);
+  }
+  .vm-win-body { padding: 10px; font-size: 12px; overflow: auto; flex: 1; }
+  .vm-term-body { font-family: var(--mono); background: rgba(9, 13, 24, 0.88); color: #e2e8f0; }
 
-    /* Resize Handles */
-    .vm-window.maximized .vm-rz { display: none; }
-    .vm-rz { position: absolute; z-index: 5; }
-    .vm-rz.n { top: -3px; left: 8px; right: 8px; height: 6px; cursor: ns-resize; }
-    .vm-rz.s { bottom: -3px; left: 8px; right: 8px; height: 6px; cursor: ns-resize; }
-    .vm-rz.e { right: -3px; top: 8px; bottom: 8px; width: 6px; cursor: ew-resize; }
-    .vm-rz.w { left: -3px; top: 8px; bottom: 8px; width: 6px; cursor: ew-resize; }
-    .vm-rz.nw { top: -4px; left: -4px; width: 10px; height: 10px; cursor: nwse-resize; }
-    .vm-rz.ne { top: -4px; right: -4px; width: 10px; height: 10px; cursor: nesw-resize; }
-    .vm-rz.sw { bottom: -4px; left: -4px; width: 10px; height: 10px; cursor: nesw-resize; }
-    .vm-rz.se { bottom: -4px; right: -4px; width: 10px; height: 10px; cursor: nwse-resize; }
+  /* Frosted App Grid Overlay inside VM */
+  .vm-app-grid {
+    position: absolute; inset: 0; z-index: 25; display: none; flex-direction: column;
+    align-items: center; justify-content: center; padding: 24px;
+    background: rgba(8, 12, 22, 0.58); backdrop-filter: blur(18px);
+  }
+  .vm-app-grid.open { display: flex; }
+  .vm-grid-cards {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; max-width: 480px; width: 100%; margin-top: 14px;
+  }
+  .vm-grid-item {
+    padding: 12px 8px; border-radius: 12px; background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.12); text-align: center; color: #fff; font-size: 12px; font-weight: 600;
+  }
+  .vm-grid-item:hover { background: rgba(56, 189, 248, 0.25); border-color: var(--accent); }
 
-    /* Interactive Terminal Inside VM */
-    .vm-term-body {
-      flex: 1; padding: 10px 12px; overflow-y: auto; cursor: text;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      font-size: 0.76rem; line-height: 1.45; color: #e2e8f0;
-      user-select: text;
-    }
-    .term-line { white-space: pre-wrap; word-break: break-word; }
-    .term-muted { color: #94a3b8; }
-    .term-accent { color: #38bdf8; }
-    .term-green { color: #34d399; }
-    .term-input-row { display: flex; align-items: center; gap: 6px; margin-top: 2px; }
-    .term-prompt { color: #34d399; white-space: nowrap; font-weight: 600; }
-    #term-input {
-      flex: 1; background: transparent; border: none; outline: none;
-      color: #f8fafc; font: inherit; caret-color: #38bdf8; min-width: 40px;
-    }
+  /* v86 Real x86 Engine Panel */
+  .v86-pane { display: none; padding: 16px; min-height: 520px; flex-direction: column; gap: 12px; background: #050810; }
+  .v86-pane.active { display: flex; }
+  .v86-screen {
+    background: #000; border: 1px solid var(--border); border-radius: 10px; min-height: 360px;
+    display: flex; align-items: center; justify-content: center; overflow: hidden; padding: 10px;
+  }
+  .v86-screen canvas { max-width: 100%; height: auto; image-rendering: pixelated; }
 
-    /* Appearance Settings Window Inside VM */
-    .vm-app-body {
-      flex: 1; padding: 14px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px;
-    }
-    .vm-app-section-title { font-size: 0.78rem; font-weight: 700; color: #cbd5e1; margin-bottom: 6px; }
-    .vm-layout-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-    .vm-layout-card {
-      background: #1a2232; border: 1.5px solid #334155; border-radius: 9px;
-      padding: 10px; cursor: pointer; text-align: left; color: #f1f5f9;
-      transition: border-color 0.15s ease, background 0.15s ease;
-    }
-    .vm-layout-card.active { border-color: #38bdf8; background: #182b46; }
-    .vm-layout-card strong { display: block; font-size: 0.8rem; }
-    .vm-layout-card span { font-size: 0.7rem; color: #94a3b8; }
-    .vm-wp-mini-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-    .vm-wp-mini {
-      border-radius: 7px; overflow: hidden; border: 2px solid transparent;
-      cursor: pointer; aspect-ratio: 16/9; padding: 0; background: #0f172a;
-    }
-    .vm-wp-mini.active { border-color: #38bdf8; }
-    .vm-wp-mini img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  /* Android Connect Phone Simulator */
+  .phone-frame {
+    background: #070a12; border: 2px solid #2b3854; border-radius: 28px; padding: 12px;
+    display: flex; flex-direction: column; gap: 10px; box-shadow: inset 0 0 24px rgba(56, 189, 248, 0.08);
+  }
+  .phone-notch {
+    width: 90px; height: 14px; background: #172033; border-radius: 99px; margin: 0 auto 2px;
+  }
+  .phone-card {
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 10px; font-size: 12px;
+  }
+  .touchpad-box {
+    height: 112px; border-radius: 12px; border: 1px dashed rgba(56, 189, 248, 0.4);
+    background: rgba(15, 23, 42, 0.85); display: flex; align-items: center; justify-content: center;
+    text-align: center; color: var(--muted); font-size: 11px; user-select: none; touch-action: none; position: relative;
+  }
+  .touchpad-dot {
+    width: 10px; height: 10px; border-radius: 50%; background: var(--accent); position: absolute;
+    transform: translate(-50%, -50%); pointer-events: none;
+  }
 
-    /* Bar (Top Bar vs Win 11 Taskbar) */
-    .mock-bar {
-      position: absolute; left: 0; right: 0; z-index: 40;
-      background: rgba(15, 23, 42, 0.84); backdrop-filter: blur(12px);
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 0 12px; font-size: 0.76rem; color: #e2e8f0;
-      transition: height 0.2s ease, top 0.2s ease, bottom 0.2s ease;
-    }
-    .mock-bar.top { top: 0; height: 30px; border-bottom: 1px solid rgba(255,255,255,0.1); }
-    .mock-bar.taskbar { bottom: 0; height: 44px; border-top: 1px solid rgba(255,255,255,0.14); }
-    .bar-left, .bar-center, .bar-right { display: flex; align-items: center; gap: 8px; }
-    .mock-bar.taskbar .bar-center { position: absolute; left: 50%; transform: translateX(-50%); }
-    .launcher-btn {
-      width: 24px; height: 24px; border-radius: 6px; border: none; cursor: pointer;
-      background: rgba(255,255,255,0.08);
-      display: grid; grid-template-columns: repeat(3, 3.5px); gap: 2px; place-content: center;
-    }
-    .mock-bar.taskbar .launcher-btn {
-      width: 30px; height: 30px; border-radius: 8px;
-      background: rgba(56,189,248,0.18); border: 1px solid rgba(56,189,248,0.42);
-    }
-    .launcher-btn:hover, .launcher-btn.active { background: #2563eb; }
-    .launcher-btn span { width: 3.5px; height: 3.5px; border-radius: 50%; background: #7dd3fc; }
-    .ws-pill { width: 18px; height: 6px; border-radius: 99px; background: #f8fafc; }
-    .ws-dot { width: 6px; height: 6px; border-radius: 50%; background: rgba(255,255,255,0.4); }
-    .task-pills { display: flex; align-items: center; gap: 6px; }
-    .task-pill {
-      border: none; border-radius: 6px; padding: 3px 10px; font-size: 0.72rem; cursor: pointer;
-      background: rgba(255,255,255,0.09); color: #cbd5e1;
-      border-bottom: 2px solid transparent; transition: all 0.12s ease;
-    }
-    .task-pill.active { background: rgba(255,255,255,0.18); color: #f8fafc; border-bottom-color: #38bdf8; }
-    .task-pill.minimized { opacity: 0.62; border-bottom-color: #64748b; }
-    .tray-btn {
-      border: none; background: rgba(255,255,255,0.08); color: #e2e8f0;
-      border-radius: 5px; padding: 2px 7px; font-size: 0.72rem; cursor: pointer;
-    }
-    .tray-btn:hover { background: rgba(56,189,248,0.24); }
+  /* Feature Cards & Gallery */
+  .cards-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .cards-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .feature-card {
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px;
+  }
+  .feature-card h3 { margin: 8px 0 6px; font-size: 16px; }
+  .feature-card p { margin: 0; font-size: 13px; color: var(--muted); }
+  .badge {
+    display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 99px;
+    background: rgba(16, 185, 129, 0.16); color: var(--emerald); border: 1px solid rgba(16, 185, 129, 0.35);
+  }
+  .badge.new { background: rgba(236, 72, 153, 0.16); color: #f472b6; border-color: rgba(236, 72, 153, 0.35); }
+  .wp-card {
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; cursor: pointer;
+  }
+  .wp-card:hover { border-color: var(--accent); transform: translateY(-2px); transition: transform 0.15s; }
+  .wp-card img { width: 100%; height: 120px; object-fit: cover; display: block; }
+  .wp-card .wp-meta { padding: 8px 10px; font-size: 12px; font-weight: 600; display: flex; justify-content: space-between; }
 
-    /* Mini App Menu Popover */
-    .vm-app-menu {
-      position: absolute; z-index: 45; width: 268px;
-      background: rgba(22, 26, 36, 0.97); border: 1px solid #334155;
-      border-radius: 12px; padding: 12px; box-shadow: 0 20px 44px rgba(0,0,0,0.65);
-      display: none; flex-direction: column; gap: 8px;
-    }
-    .vm-app-menu.open { display: flex; }
-    .vm-app-menu.pos-top { top: 36px; left: 10px; }
-    .vm-app-menu.pos-taskbar { bottom: 52px; left: 50%; transform: translateX(-50%); }
-    .vm-menu-header { font-size: 0.75rem; font-weight: 700; color: #94a3b8; padding: 0 4px; }
-    .vm-menu-item {
-      display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
-      padding: 8px 10px; border-radius: 8px; border: 1px solid transparent;
-      background: rgba(255,255,255,0.04); color: #f1f5f9; cursor: pointer; font-size: 0.82rem;
-    }
-    .vm-menu-item:hover { background: #1e293b; border-color: #38bdf8; }
-    .vm-menu-sub { display: block; font-size: 0.7rem; color: #94a3b8; }
+  /* Code & Shortcuts */
+  pre.code-block {
+    background: #060911; border: 1px solid var(--border); border-radius: 12px; padding: 16px;
+    overflow-x: auto; font-family: var(--mono); font-size: 13px; color: #bae6fd; margin: 0;
+  }
+  .tbl-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-card); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 520px; }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+  th { background: rgba(255,255,255,0.03); color: var(--accent); }
+  kbd {
+    background: #1e293b; border: 1px solid #334155; border-radius: 6px; padding: 2px 7px;
+    font-family: var(--mono); font-size: 11px; color: #f8fafc;
+  }
 
-    /* Sections */
-    section { padding: 60px 0; }
-    h2 { font-size: 1.9rem; font-weight: 700; margin-bottom: 10px; letter-spacing: -0.02em; }
-    .section-desc { color: var(--muted); margin-bottom: 28px; max-width: 660px; }
+  footer {
+    border-top: 1px solid var(--border); padding: 28px 0; text-align: center; color: var(--muted); font-size: 13px;
+  }
 
-    .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 18px; }
-    .card {
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: 14px; padding: 22px;
-    }
-    .card h3 { font-size: 1.05rem; margin-bottom: 8px; color: #f8fafc; }
-    .card p { font-size: 0.9rem; color: var(--muted); }
-    .badge {
-      display: inline-block; font-size: 0.72rem; font-weight: 600;
-      padding: 2px 8px; border-radius: 6px; margin-bottom: 10px;
-      background: rgba(52, 211, 153, 0.14); color: #6ee7b7;
-    }
+  /* Toast */
+  #vmToast {
+    position: fixed; bottom: 18px; right: 18px; z-index: 90; padding: 10px 16px; border-radius: 10px;
+    background: #0f172a; border: 1px solid var(--accent); color: #fff; font-size: 13px; font-weight: 600;
+    display: none; box-shadow: 0 12px 30px rgba(0,0,0,0.5);
+  }
 
-    /* Wallpaper Gallery */
-    .wp-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
-    .wp-card {
-      cursor: pointer; border-radius: 12px; overflow: hidden;
-      border: 2px solid transparent; background: var(--surface);
-      transition: transform 0.15s ease, border-color 0.15s ease;
-    }
-    .wp-card:hover, .wp-card.active { transform: translateY(-2px); border-color: var(--accent); }
-    .wp-card img { width: 100%; aspect-ratio: 16/9; object-fit: cover; display: block; }
-    .wp-card span { display: block; padding: 8px 12px; font-size: 0.84rem; color: var(--muted); }
-
-    /* Tabbed Installer */
-    .install-tabs {
-      display: inline-flex; flex-wrap: wrap; gap: 6px;
-      background: var(--surface); border: 1px solid var(--border);
-      padding: 5px; border-radius: 12px; margin-bottom: 16px;
-    }
-    .install-tab {
-      border: none; background: transparent; color: var(--muted); cursor: pointer;
-      padding: 9px 16px; border-radius: 8px; font-weight: 600; font-size: 0.88rem;
-      transition: all 0.15s ease;
-    }
-    .install-tab.active { background: #2563eb; color: #fff; }
-    .install-panel { display: none; }
-    .install-panel.active { display: block; }
-    .code-wrap { position: relative; margin-bottom: 14px; }
-    pre {
-      background: #0d1321; border: 1px solid var(--border); border-radius: 12px;
-      padding: 18px 92px 18px 18px; overflow-x: auto; font-size: 0.88rem; color: #e2e8f0;
-    }
-    .copy-btn {
-      position: absolute; top: 12px; right: 12px;
-      border: 1px solid var(--border); background: var(--surface-2); color: #e2e8f0;
-      padding: 6px 12px; border-radius: 7px; font-size: 0.78rem; font-weight: 600; cursor: pointer;
-    }
-    .copy-btn:hover { border-color: var(--accent); color: #fff; }
-    .copy-btn.copied { background: rgba(52, 211, 153, 0.2); border-color: var(--emerald); color: #6ee7b7; }
-    .install-note { font-size: 0.88rem; color: var(--muted); }
-
-    table { width: 100%; border-collapse: collapse; background: var(--surface); border-radius: 12px; overflow: hidden; }
-    th, td { padding: 12px 16px; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
-    th { color: #cbd5e1; background: var(--surface-2); }
-    td kbd {
-      background: #0b101b; border: 1px solid var(--border); border-radius: 6px;
-      padding: 2px 7px; font-family: ui-monospace, monospace; font-size: 0.82rem; color: #7dd3fc;
-    }
-
-    footer {
-      border-top: 1px solid var(--border); padding: 32px 0;
-      text-align: center; color: var(--muted); font-size: 0.88rem;
-    }
-  </style>
+  /* Responsive Breakpoints */
+  @media (max-width: 1020px) {
+    .studio-grid { grid-template-columns: 1fr; }
+    .cards-3 { grid-template-columns: repeat(2, 1fr); }
+    .cards-4 { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 760px) {
+    nav.nav-links { display: none; }
+    .hamburger { display: inline-flex; }
+    .stat-row { grid-template-columns: repeat(2, 1fr); }
+    .cards-3, .cards-4 { grid-template-columns: 1fr; }
+    .vm-mon-split.dual { grid-template-columns: 1fr; }
+    .vm-grid-cards { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
 </head>
 <body>
-  <nav>
-    <div class="container nav-inner">
-      <div class="brand">
-        <svg width="26" height="26" viewBox="0 0 128 128">
-          <rect x="8" y="8" width="112" height="112" rx="26" fill="#0f172a" stroke="#38bdf8" stroke-width="5"/>
-          <path d="M74 34a30 30 0 1 0 20 52 24 24 0 1 1-20-52z" fill="#38bdf8"/>
-        </svg>
-        Lunar DE
-      </div>
-      <div class="nav-links">
-        <a href="#features">Features</a>
-        <a href="#wallpapers">Wallpapers</a>
-        <a href="#install">Install</a>
-        <a href="#shortcuts">Shortcuts</a>
-        <a href="https://github.com/Lunar-Entertainment/Lunar_DE" target="_blank">GitHub</a>
-      </div>
-    </div>
-  </nav>
 
-  <header class="hero container">
-    <div class="pill-row">
-      <span class="pill">C++20</span>
-      <span class="pill">X11 / libxcb</span>
-      <span class="pill">Self-Hosted APT Repo</span>
-      <span class="pill">Multi-Monitor RandR</span>
-      <span class="pill">Gemini Live &amp; MCP</span>
-    </div>
-    <h1>A Minimal, Modular X11<br/>Desktop Environment</h1>
-    <p class="subtitle">
-      Built from the ground up in C++20 on top of <code>libxcb</code>. Featuring Aero Snap,
-      true per-monitor wallpapers, switchable Top Bar &amp; Windows 11 Taskbar layouts,
-      32+ wallpapers with auto-rotate fade-in, Gemini Live voice control, and boot auto-updates.
+<header class="nav-bar">
+  <div class="container nav-inner">
+    <a href="#top" class="brand">
+      <span class="brand-orb"></span>
+      <span>Lunar DE</span>
+      <span class="version-pill">v1.0.25</span>
+    </a>
+    <nav class="nav-links" aria-label="Primary">
+      <a href="#vm-studio">VM Studio</a>
+      <a href="#whats-new">What's New</a>
+      <a href="#architecture">Architecture</a>
+      <a href="#wallpapers">40 Live + 48 2K</a>
+      <a href="#connect-section">Android Connect</a>
+      <a href="#install">Install</a>
+      <a href="#shortcuts">Shortcuts</a>
+    </nav>
+    <button id="mobileMenuBtn" class="hamburger" aria-label="Toggle Menu" aria-expanded="false">☰</button>
+  </div>
+  <div id="mobileNavDrawer" class="mobile-drawer">
+    <a href="#vm-studio">Per-Instance VM Studio</a>
+    <a href="#whats-new">What's New in v1.0.25</a>
+    <a href="#architecture">Architecture &amp; Changelog</a>
+    <a href="#wallpapers">40 Live + 48 Static Wallpapers</a>
+    <a href="#connect-section">Lunar DE Connect Android App</a>
+    <a href="#install">Install on Ubuntu / Debian</a>
+    <a href="#shortcuts">Keyboard Shortcuts</a>
+  </div>
+</header>
+
+<main id="top">
+  <section class="hero container">
+    <span class="badge new">RELEASE v1.0.25 • C++20 LIBXCB + LIBDBUS + WEBGL2 LIVE WALLPAPERS</span>
+    <h1><span class="grad-text">Modular X11 Desktop</span><br>Workspaces, Visual Alt+Tab &amp; 40 Live Scenes</h1>
+    <p>
+      Built from scratch in C++20 on <code>libxcb</code> and <code>libdbus-1</code> with 4 EWMH virtual workspaces (sticky windows &amp; per-workspace focus memory),
+      a centered glassmorphism <code>Alt+Tab</code> switcher, numbered panel workspace pills with occupied/urgent indicators, native <code>lunar-notify</code> D-Bus toasts
+      &amp; Notification Center, 40 upgraded WebGL &amp; HiDPI live wallpapers, and the <strong>Lunar DE Connect</strong> Android companion.
     </p>
-    <div class="cta-row">
-      <a class="btn btn-primary" href="#install">Install via APT</a>
-      <a class="btn btn-ghost" href="https://github.com/Lunar-Entertainment/Lunar_DE" target="_blank">View on GitHub</a>
+    <div class="hero-cta">
+      <a href="#vm-studio"><button class="btn-primary">Launch Browser VM Studio</button></a>
+      <a href="#install"><button class="btn-secondary">Install via APT (Ubuntu/Debian)</button></a>
+      <a href="https://github.com/lunar-entertainment/Lunar_DE" target="_blank" rel="noopener"><button class="btn-secondary">GitHub Source</button></a>
     </div>
 
-    <!-- Live Interactive Mini-VM -->
-    <div class="preview-shell">
-      <div class="preview-controls">
-        <span><strong>Live Mini-VM:</strong> Drag windows to top/left/right edges to Aero Snap, resize corners, or type commands (<code>help</code>, <code>neofetch</code>, <code>layout win11</code>).</span>
-        <div class="toggle-group">
-          <button class="toggle-btn active" id="btn-top" type="button" onclick="setLayout('top')">Top Bar</button>
-          <button class="toggle-btn" id="btn-taskbar" type="button" onclick="setLayout('taskbar')">Taskbar (Win 11)</button>
+    <div class="stat-row">
+      <div class="stat-box"><strong>4 Workspaces</strong><span>EWMH sticky + focus history</span></div>
+      <div class="stat-box"><strong>Glass Alt+Tab</strong><span>App icons + live highlight</span></div>
+      <div class="stat-box"><strong>lunar-notify</strong><span>C++20 D-Bus toasts + DND drawer</span></div>
+      <div class="stat-box"><strong>Android Connect</strong><span>Mirrored alerts, 60 Hz UDP &amp; screen</span></div>
+    </div>
+  </section>
+
+  <!-- Per-Instance VM Studio + Android Connect Simulator -->
+  <section id="vm-studio" class="container">
+    <div class="sec-head">
+      <h2>Per-Instance VM Studio + Lunar Connect Simulator</h2>
+      <p>
+        Spawn multiple independent VM instances (<strong>+ New VM Instance</strong>). Switch each instance between
+        <strong>Engine A: Lunar DE Desktop VM</strong> (interactive live wallpapers, 6 layouts, frosted App Grid, Terminal skins, Testing tab &amp; <code>lunar-win</code> tests)
+        or <strong>Engine B: Literal <code>v86</code> WebAssembly x86 VM</strong>, driven live by the Android phone simulator.
+      </p>
+    </div>
+
+    <div class="studio-shell">
+      <div id="vmTabsBar" class="vm-tabs-bar"></div>
+
+      <div class="vm-toolbar">
+        <div class="ctrl-group">
+          <button id="engineBtnA" class="chip-btn active">Engine A: Lunar DE VM</button>
+          <button id="engineBtnB" class="chip-btn">Engine B: v86 x86 VM</button>
+          <button id="dualHeadBtn" class="chip-btn">Monitors: 1 Head</button>
+          <button id="panelGlassBtn" class="chip-btn active">Panel Live Glass: ON</button>
+        </div>
+        <div class="ctrl-group">
+          <select id="vmLayoutSelect" class="chip-btn" aria-label="Taskbar Layout">
+            <option value="taskbar">Taskbar (Bottom)</option>
+            <option value="top">Top Bar</option>
+            <option value="floating-dock">Floating Dock</option>
+            <option value="taskbar-top">Taskbar (Top)</option>
+            <option value="classic-bottom">Classic Bottom</option>
+            <option value="compact-bottom">Compact Bottom</option>
+          </select>
+          <select id="vmLiveSelect" class="chip-btn" aria-label="Live Wallpaper">
+            <option value="aurora">02 Aurora Borealis</option>
+            <option value="matrix">04 Matrix Rain</option>
+            <option value="bio">08 Deep Bioluminescence</option>
+            <option value="snow">17 Arctic Snowfall</option>
+            <option value="cyber">18 Neon Cyber Rain</option>
+            <option value="warp">20 Hyperspace Warp</option>
+            <option value="moon">25 Crimson Moonrise</option>
+            <option value="hex">28 Cyber Hex Grid</option>
+            <option value="pulsar">30 Deep Space Pulsar</option>
+          </select>
+          <button id="vmAppGridBtn" class="chip-btn">Super Grid</button>
         </div>
       </div>
 
-      <div class="desktop-canvas mode-top" id="desktop-canvas">
-        <!-- Desktop Icons -->
-        <div class="vm-desktop-icons" id="vm-desktop-icons">
-          <button class="vm-dicon" type="button" data-app="terminal" title="Double-click to open Terminal">
-            <span class="vm-dicon-glyph">&gt;_</span>
-            <span>Terminal</span>
-          </button>
-          <button class="vm-dicon" type="button" data-app="appearance" title="Double-click to open Appearance Settings">
-            <span class="vm-dicon-glyph" style="color:#38bdf8">&#9635;</span>
-            <span>Appearance</span>
-          </button>
-        </div>
+      <div class="studio-grid">
+        <!-- Left: Active VM Screen -->
+        <div class="vm-screen" id="vmScreen">
+          <div id="engineAPane">
+            <div id="vmMonSplit" class="vm-mon-split">
+              <div class="vm-monitor" id="vmMon0">
+                <canvas class="vm-wp-canvas" id="vmCanvas0"></canvas>
+                <div class="pause-pill" id="pausePill0">Monitor 1: Running</div>
 
-        <!-- Aero Snap Overlay -->
-        <div class="vm-snap-preview" id="snap-preview"></div>
+                <div class="vm-panel top glass" id="vmPanel">
+                  <div style="display:flex;align-items:center;gap:8px;">
+                    <strong style="color:var(--accent);cursor:pointer;" id="panelAppsBtn">⊞ Apps</strong>
+                    <span id="panelLayoutTag" style="color:var(--muted);">Taskbar</span>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:6px;">
+                    <button class="chip-btn" style="min-height:24px;padding:2px 8px;" id="openTestAppBtn">Testing App</button>
+                    <button class="chip-btn" style="min-height:24px;padding:2px 8px;" id="openTermAppBtn">Terminal</button>
+                    <button class="chip-btn" style="min-height:24px;padding:2px 8px;" id="openWinDemoBtn">lunar-win</button>
+                  </div>
+                  <span id="vmClock" style="font-weight:700;">19:45</span>
+                </div>
 
-        <!-- Window 1: Interactive Terminal -->
-        <div class="vm-window focused" id="win-terminal" data-win="terminal" style="left:112px;top:46px;width:540px;height:310px;z-index:12;">
-          <div class="vm-rz n" data-dir="n"></div>
-          <div class="vm-rz s" data-dir="s"></div>
-          <div class="vm-rz e" data-dir="e"></div>
-          <div class="vm-rz w" data-dir="w"></div>
-          <div class="vm-rz nw" data-dir="nw"></div>
-          <div class="vm-rz ne" data-dir="ne"></div>
-          <div class="vm-rz sw" data-dir="sw"></div>
-          <div class="vm-rz se" data-dir="se"></div>
-          <div class="vm-titlebar" data-drag="terminal">
-            <span class="vm-title-text">lunar@desktop: ~/Lunar_DE</span>
-            <div class="vm-win-btns">
-              <button class="vm-win-btn min" type="button" data-action="min" title="Minimize">&#x2500;</button>
-              <button class="vm-win-btn max" type="button" data-action="max" title="Maximize / Restore">&#x25A1;</button>
-              <button class="vm-win-btn close" type="button" data-action="close" title="Close">&#x2715;</button>
-            </div>
-          </div>
-          <div class="vm-term-body" id="vm-term-body">
-            <div id="term-output"></div>
-            <div class="term-input-row">
-              <span class="term-prompt">lunar@de:~$</span>
-              <input id="term-input" type="text" autocomplete="off" spellcheck="false" aria-label="Mini-VM Terminal Input" />
-            </div>
-          </div>
-        </div>
+                <div class="vm-icons">
+                  <div class="vm-dicon" id="iconTesting">🧪<br>Testing VM</div>
+                  <div class="vm-dicon" id="iconTerminal">❯_<br>Terminal</div>
+                  <div class="vm-dicon" id="iconFsToggle">⛶<br>Fullscreen</div>
+                  <div class="vm-dicon" id="iconBgInput">🎮<br>lunar-win</div>
+                </div>
 
-        <!-- Window 2: Appearance Settings (initially closed) -->
-        <div class="vm-window hidden" id="win-appearance" data-win="appearance" style="left:250px;top:72px;width:430px;height:315px;z-index:11;">
-          <div class="vm-rz n" data-dir="n"></div>
-          <div class="vm-rz s" data-dir="s"></div>
-          <div class="vm-rz e" data-dir="e"></div>
-          <div class="vm-rz w" data-dir="w"></div>
-          <div class="vm-rz nw" data-dir="nw"></div>
-          <div class="vm-rz ne" data-dir="ne"></div>
-          <div class="vm-rz sw" data-dir="sw"></div>
-          <div class="vm-rz se" data-dir="se"></div>
-          <div class="vm-titlebar" data-drag="appearance">
-            <span class="vm-title-text">Zorin Appearance - Lunar DE</span>
-            <div class="vm-win-btns">
-              <button class="vm-win-btn min" type="button" data-action="min" title="Minimize">&#x2500;</button>
-              <button class="vm-win-btn max" type="button" data-action="max" title="Maximize / Restore">&#x25A1;</button>
-              <button class="vm-win-btn close" type="button" data-action="close" title="Close">&#x2715;</button>
-            </div>
-          </div>
-          <div class="vm-app-body">
-            <div>
-              <div class="vm-app-section-title">Panel &amp; Taskbar Layout</div>
-              <div class="vm-layout-cards">
-                <button class="vm-layout-card active" id="vm-card-top" type="button" onclick="setLayout('top')">
-                  <strong>Top Bar</strong>
-                  <span>Classic 28px top panel</span>
-                </button>
-                <button class="vm-layout-card" id="vm-card-taskbar" type="button" onclick="setLayout('taskbar')">
-                  <strong>Taskbar (Win 11)</strong>
-                  <span>Centered 44px bottom bar</span>
-                </button>
+                <!-- Dynamic App Window inside VM -->
+                <div class="vm-win" id="vmMainWin" style="top:54px; left:106px; right:16px; bottom:52px;">
+                  <div class="vm-win-bar">
+                    <span id="vmWinTitle">Lunar Settings — Testing Tab</span>
+                    <div style="display:flex;gap:6px;">
+                      <button class="chip-btn" style="min-height:20px;padding:1px 7px;" id="winFsBtn">Fullscreen M1</button>
+                      <button class="chip-btn" style="min-height:20px;padding:1px 7px;" id="winMinBtn">_</button>
+                    </div>
+                  </div>
+                  <div class="vm-win-body" id="vmWinBody"></div>
+                </div>
+
+                <!-- Virtual Cursor moved by Phone Touchpad -->
+                <div id="vmCursor" style="position:absolute;left:55%;top:55%;width:12px;height:12px;border-radius:50%;background:#fff;border:2px solid var(--accent);z-index:22;pointer-events:none;transition:left 0.05s,top 0.05s;"></div>
+
+                <!-- Frosted Live Super App Grid -->
+                <div class="vm-app-grid" id="vmAppGrid">
+                  <strong style="font-size:16px;">Frosted Full-Screen App Overview (Live Wallpaper Visible Underneath)</strong>
+                  <span style="font-size:12px;color:var(--muted);">Translucent 32-bit ARGB glass composited smoothly over the active canvas</span>
+                  <div class="vm-grid-cards">
+                    <div class="vm-grid-item" data-launch="testing">🧪 Lunar Testing</div>
+                    <div class="vm-grid-item" data-launch="terminal">❯_ Lunar Terminal</div>
+                    <div class="vm-grid-item" data-launch="lunar-win">🎮 lunar-win Demo</div>
+                    <div class="vm-grid-item" data-launch="close">✕ Close Overview</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="vm-monitor" id="vmMon1" style="display:none;">
+                <canvas class="vm-wp-canvas" id="vmCanvas1"></canvas>
+                <div class="pause-pill" id="pausePill1">Monitor 2: Active</div>
+                <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:18px;pointer-events:none;">
+                  <div style="background:rgba(8,12,22,0.72);border:1px solid var(--border);border-radius:12px;padding:14px;">
+                    <strong>Monitor 2 Keeps Animating!</strong>
+                    <p style="margin:6px 0 0;font-size:12px;color:var(--muted);">
+                      Toggle <strong>Fullscreen M1</strong> on Monitor 1: only Monitor 1 freezes while Monitor 2 stays smooth.
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
-            <div>
-              <div class="vm-app-section-title">Desktop Wallpaper</div>
-              <div class="vm-wp-mini-grid" id="vm-wp-mini-grid"></div>
+          </div>
+
+          <!-- Engine B: Literal v86 x86 WebAssembly VM -->
+          <div id="engineBPane" class="v86-pane">
+            <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;">
+              <div>
+                <strong>Per-Instance x86 WebAssembly VM (v86 Engine)</strong>
+                <div id="v86StatusText" style="font-size:12px;color:var(--muted);">Idle — Click Boot x86 Instance to spin up a dedicated v86 CPU &amp; RAM instance</div>
+              </div>
+              <div style="display:flex;gap:8px;">
+                <button id="v86BootBtn" class="chip-btn active">Boot x86 Instance</button>
+                <button id="v86StopBtn" class="chip-btn">Power Off</button>
+              </div>
+            </div>
+            <div id="v86Screen" class="v86-screen">
+              <div style="text-align:center;color:var(--muted);max-width:460px;font-size:13px;">
+                Each VM tab owns an isolated <code>V86</code> instance configuration. Click <strong>Boot x86 Instance</strong>
+                to load <code>libv86</code> and boot an x86 image in WebAssembly (with automatic fallback notice if offline/CDN-restricted).
+              </div>
             </div>
           </div>
         </div>
 
-        <!-- Mini App Menu Popover -->
-        <div class="vm-app-menu pos-top" id="vm-app-menu">
-          <div class="vm-menu-header">Lunar Applications</div>
-          <button class="vm-menu-item" type="button" onclick="vmLaunchApp('terminal')">
-            <span style="font-family:monospace;font-weight:700;color:#38bdf8">&gt;_</span>
-            <span>Terminal<span class="vm-menu-sub">Interactive Lunar DE shell</span></span>
-          </button>
-          <button class="vm-menu-item" type="button" onclick="vmLaunchApp('appearance')">
-            <span style="color:#818cf8;font-size:1rem">&#9635;</span>
-            <span>Appearance Settings<span class="vm-menu-sub">Switch bar layout &amp; wallpapers</span></span>
-          </button>
-          <button class="vm-menu-item" type="button" onclick="vmCycleWallpaper()">
-            <span style="color:#34d399;font-size:1rem">&#8635;</span>
-            <span>Next Wallpaper<span class="vm-menu-sub">Cycle bundled backgrounds</span></span>
-          </button>
-        </div>
+        <!-- Right: Interactive Lunar DE Connect Android Phone Simulator -->
+        <aside class="phone-frame" aria-label="Lunar DE Connect Phone Simulator">
+          <div class="phone-notch"></div>
+          <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;">
+            <strong>Lunar Connect</strong>
+            <span id="phonePairedBadge" style="color:var(--emerald);font-weight:700;">● Paired to VM #1</span>
+          </div>
 
-        <!-- Top Bar / Windows 11 Taskbar -->
-        <div class="mock-bar top" id="mock-bar">
-          <div class="bar-left" id="bar-left">
-            <button class="launcher-btn" id="vm-launcher-btn" type="button" title="App Menu" onclick="toggleAppMenu(event)">
-              <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
-            </button>
-            <div class="ws-pill" title="Workspace 1"></div>
-            <div class="ws-dot" title="Workspace 2"></div>
-            <div class="task-pills" id="task-pills-left"></div>
+          <div class="phone-card">
+            <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);">
+              <span>Volume</span><strong id="phoneVolLbl">74%</strong>
+            </div>
+            <input id="phoneVolSlider" type="range" min="0" max="100" value="74" style="width:100%;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px;">
+              <button class="chip-btn" id="phoneToggleLiveBtn">Next Live WP</button>
+              <button class="chip-btn" id="phoneGlassBtn">Toggle Glass</button>
+            </div>
           </div>
-          <div class="bar-center" id="bar-center">
-            <span id="mock-clock">nov 19 &nbsp; 18:55</span>
-          </div>
-          <div class="bar-right">
-            <span style="color:#34d399" title="Gemini Live">&#x25CF;</span>
-            <button class="tray-btn" type="button" title="Open Terminal" onclick="vmLaunchApp('terminal')">&gt;_</button>
-            <button class="tray-btn" type="button" title="Appearance" onclick="vmLaunchApp('appearance')">Prefs</button>
-            <span id="mock-clock-right" style="display:none"></span>
-          </div>
-        </div>
-      </div>
-    </div>
-  </header>
 
-  <section id="features" class="container">
-    <h2>Built From Scratch for Speed &amp; Control</h2>
-    <p class="section-desc">
-      Two lightweight C++20 binaries (<code>lunar-wm</code> and <code>lunar-panel</code>) with zero GNOME/KDE desktop shell bloat.
-    </p>
-    <div class="grid-3">
-      <div class="card">
-        <span class="badge">Window Manager</span>
-        <h3>Aero Snap &amp; Full CSD Support</h3>
-        <p>Drag any window—including Electron &amp; Chromium apps like Antigravity via <code>_NET_WM_MOVERESIZE</code>—to the top edge to maximize or left/right edges to half-snap with a live rounded preview overlay.</p>
-      </div>
-      <div class="card">
-        <span class="badge">Multi-Monitor</span>
-        <h3>Per-Monitor RandR &amp; Swap</h3>
-        <p>Queries <code>xcb_randr_get_monitors</code> for unstretched per-monitor wallpapers, per-monitor maximize/snap/fullscreen, and one-click persistent Left/Right monitor swapping.</p>
-      </div>
-      <div class="card">
-        <span class="badge">Appearance</span>
-        <h3>Top Bar &amp; Windows 11 Taskbar</h3>
-        <p>Switch instantly between the sleek 28px Top Bar and the centered 44px Windows 11 bottom Taskbar with pinned app icons and automatic EWMH strut updates.</p>
-      </div>
-      <div class="card">
-        <span class="badge">Desktop &amp; Apps</span>
-        <h3>SVG/PNG Icons &amp; Desktop Pinning</h3>
-        <p>Full Zorin/Flatpak/system app menu with search, category filters, SVG/PNG icon rendering, right-click to pin to Desktop, and middle-click to pin to the Taskbar.</p>
-      </div>
-      <div class="card">
-        <span class="badge">Voice AI</span>
-        <h3>Built-In Gemini Live</h3>
-        <p>Press <code>Super + G</code> or click the panel orb to talk to Gemini Live over bidirectional audio with desktop tool calling (launch apps, set volume, change wallpapers).</p>
-      </div>
-      <div class="card">
-        <span class="badge">Antigravity Plugin</span>
-        <h3>PC Control MCP Server</h3>
-        <p>Ships with a self-contained Antigravity (<code>agy</code>) plugin exposing 9 MCP tools so Gemini models can inspect windows, capture screenshots, launch apps, and configure Lunar DE.</p>
+          <div class="touchpad-box" id="phoneTouchpad">
+            <span>Touchpad (Drag to move VM cursor • Tap = Click)</span>
+            <div class="touchpad-dot" id="touchpadDot" style="left:50%;top:50%;display:none;"></div>
+          </div>
+
+          <div class="phone-card" style="display:flex;flex-direction:column;gap:6px;">
+            <strong style="font-size:11px;color:var(--muted);">Send to Background App (lunar-win)</strong>
+            <input id="phoneBgInput" type="text" value="w:hold:1.0" style="width:100%;padding:6px 8px;border-radius:6px;background:#090d18;color:#fff;border:1px solid var(--border);font-size:12px;">
+            <button class="chip-btn active" id="phoneSendBgBtn">Send Without Focusing</button>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+            <button class="chip-btn" id="phoneAppGridBtn">App Overview</button>
+            <button class="chip-btn" id="phoneNotifyBtn">Ping Desktop</button>
+          </div>
+        </aside>
       </div>
     </div>
   </section>
 
+  <!-- What's New in v1.0.25 -->
+  <section id="whats-new" class="container">
+    <div class="sec-head">
+      <h2>Everything Built in v1.0.25</h2>
+      <p>40 upgraded WebGL &amp; HiDPI live wallpapers, crash-free ARGB desktop drag compositing, 4 EWMH virtual workspaces, visual glass Alt+Tab switcher, and native D-Bus notifications.</p>
+    </div>
+    <div class="cards-3">
+      <div class="feature-card">
+        <span class="badge new">NEW • WORKSPACES</span>
+        <h3>4 EWMH Virtual Workspaces</h3>
+        <p>Full <code>_NET_NUMBER_OF_DESKTOPS</code>, <code>_NET_CURRENT_DESKTOP</code>, <code>_NET_DESKTOP_NAMES</code>, and <code>_NET_WM_DESKTOP</code> (including <code>0xFFFFFFFF</code> sticky windows) with per-workspace focus memory. Switch via <code>Super+1..4</code>, move via <code>Super+Shift+1..4</code>, or cycle with <code>Super+Ctrl+Left/Right</code>.</p>
+      </div>
+      <div class="feature-card">
+        <span class="badge new">NEW • VISUAL ALT+TAB</span>
+        <h3>Glassmorphism Window Switcher</h3>
+        <p>Hold <code>Alt+Tab</code> or <code>Alt+Shift+Tab</code> to open a centered 32-bit ARGB switcher displaying MRU windows on the current workspace with real 48 px app icons, live highlight, and instant focus+raise when releasing <code>Alt</code>.</p>
+      </div>
+      <div class="feature-card">
+        <span class="badge new">NEW • PANEL PILLS</span>
+        <h3>Interactive Workspace Switcher Bar</h3>
+        <p>Numbered 1–4 pills in <code>lunar-panel</code> display active highlight, occupied indicator dots, and urgent attention glow. Click any pill directly or scroll the mouse wheel over the workspace bar to cycle.</p>
+      </div>
+      <div class="feature-card">
+        <span class="badge new">LUNAR-NOTIFY</span>
+        <h3>C++20 D-Bus Daemon &amp; DND Drawer</h3>
+        <p>Claims <code>org.freedesktop.Notifications</code> via <code>libdbus-1</code>, renders stacked glass toasts with icons &amp; actions, and syncs to the slide-out Notification Center drawer with Do Not Disturb.</p>
+      </div>
+      <div class="feature-card">
+        <span class="badge new">CONNECT &amp; MCP</span>
+        <h3>Phone Mirroring + AI Workspace Control</h3>
+        <p>Android companion mirrors desktop alerts, dismisses remotely, streams 60 Hz UDP touchpad &amp; opt-in screen view, and saves multiple PCs. MCP exposes <code>switch_workspace</code> and <code>move_window_to_workspace</code>.</p>
+      </div>
+      <div class="feature-card">
+        <span class="badge new">GAME INPUT &amp; LIVE</span>
+        <h3>XInput2 Automation + 40 Live Scenes</h3>
+        <p>Per-device XI2 click grabs &amp; virtual <code>ClientPointer</code> fix background game input in <code>lunar-win</code>, alongside 40 WebGL2/GLSL &amp; HiDPI Canvas2D live wallpapers, 5-theme <code>lunar-terminal</code>, and isolated Xephyr sandbox.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Architecture & Release Changelog -->
+  <section id="architecture" class="container">
+    <div class="sec-head">
+      <h2>Modular C++20 Architecture &amp; Release Notes</h2>
+      <p>Three lean native C++20 XCB daemons working in concert with a zero-overhead UNIX socket IPC bridge and optional Python/Compose companion services.</p>
+    </div>
+    <div class="cards-3">
+      <div class="feature-card">
+        <span class="badge new">C++20 • LIBXCB</span>
+        <h3><code>lunar-wm</code> &amp; <code>lunar-panel</code></h3>
+        <p>Reparenting EWMH window manager with 4 virtual workspaces, sticky windows, MRU visual <code>Alt+Tab</code> switcher, XInput2 grabs, and 6-layout MIT-SHM panel with Workspace Pills &amp; Notification Center.</p>
+      </div>
+      <div class="feature-card">
+        <span class="badge">C++20 • LIBDBUS-1</span>
+        <h3><code>lunar-notify</code> + UNIX Socket</h3>
+        <p>Implements <code>GetCapabilities</code>, <code>Notify</code>, <code>CloseNotification</code>, <code>GetServerInformation</code>, and D-Bus signals; keeps a 50-item ring buffer synced live over <code>$XDG_RUNTIME_DIR/lunar-notify.sock</code>.</p>
+      </div>
+      <div class="feature-card">
+        <span class="badge">PYTHON + COMPOSE</span>
+        <h3><code>lunar-connect</code>, MCP &amp; Android</h3>
+        <p>Bridges <code>lunar-notify.sock</code>, in-process <code>libXtst</code> UDP mouse input, RandR JPEG screen capture, <code>lunar-win</code>, and MCP workspace/window tools over LAN or Tailscale mesh.</p>
+      </div>
+    </div>
+    <div class="tbl-wrap" style="margin-top:18px;">
+      <table>
+        <thead><tr><th>Version</th><th>Highlights</th></tr></thead>
+        <tbody>
+          <tr><td><strong>v1.0.25</strong></td><td>Upgraded all 32 existing live wallpapers and added 8 new scenes (<strong>40 total</strong>): GPU-accelerated WebGL GLSL shaders (<em>Gargantua Event Horizon</em>, <em>Plasma Chromatic Vortex</em>, <em>Lunar Eclipse</em>, <em>Aurora Borealis</em>, <em>Ocean Caustics</em>), HiDPI <code>devicePixelRatio</code> scaling, additive bloom Canvas2D layers, and WebKit2 hardware acceleration.</td></tr>
+          <tr><td><strong>v1.0.24</strong></td><td>Fixed <code>picom</code> <code>win_bind_mask</code> crash during desktop rubberband drag on 32-bit ARGB overlays, fixed <code>lunar-desktop-overlay</code> Z-order stacking above all multi-monitor live wallpaper windows, and added <code>fcntl.flock</code> daemon locking + orphan cleanup in <code>lunar-live-wallpaper</code>.</td></tr>
+          <tr><td><strong>v1.0.23</strong></td><td>4 EWMH virtual workspaces (<code>_NET_DESKTOP_NAMES</code>, sticky <code>0xFFFFFFFF</code>, per-workspace focus memory, <code>Super+1..4</code>, <code>Super+Shift+1..4</code>, <code>Super+Ctrl+Left/Right</code>), numbered <code>lunar-panel</code> workspace pills (occupied/urgent dots + wheel scroll), visual ARGB glass <code>Alt+Tab</code> / <code>Alt+Shift+Tab</code> switcher, and MCP <code>switch_workspace</code> / <code>move_window_to_workspace</code>.</td></tr>
+          <tr><td><strong>v1.0.22</strong></td><td>Native C++20 <code>lunar-notify</code> D-Bus daemon, stacked ARGB glass toasts, <code>lunar-panel</code> Bell badge &amp; slide-out Notification Center with Do Not Disturb, Android notification mirroring + remote dismiss, and multi-PC Saved Connections.</td></tr>
+          <tr><td><strong>v1.0.21</strong></td><td>XInput2 per-device WM grabs &amp; <code>lunar-win</code> virtual <code>ClientPointer</code> fixes for SDL2/GLFW/Unity/Wine games, zero-lag 60 Hz UDP mouse input over LAN &amp; Tailscale, and opt-in on-demand Desktop Screen Viewer (0 B when off).</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Live + Static Wallpaper Showcase -->
   <section id="wallpapers" class="container">
-    <h2>32 Free Wallpapers + Smooth Auto-Rotate</h2>
-    <p class="section-desc">
-      Click any preview below to test it live in the Mini-VM above (or run <code>wallpaper 1..8</code> in the VM terminal). Lunar DE includes 32 bundled 1080p wallpapers plus a 33rd <strong>Cycle All (15s)</strong> option with smoothstep cross-fading.
-    </p>
-    <div class="wp-grid" id="wp-gallery">
-      <div class="wp-card active" data-wp="1" onclick="setWallpaperByIndex(1)"><img src="assets/01_lunar_eclipse.jpg" alt="Lunar Eclipse"/><span>01 · Lunar Eclipse</span></div>
-      <div class="wp-card" data-wp="2" onclick="setWallpaperByIndex(2)"><img src="assets/02_nordic_aurora.jpg" alt="Nordic Aurora"/><span>02 · Nordic Aurora</span></div>
-      <div class="wp-card" data-wp="3" onclick="setWallpaperByIndex(3)"><img src="assets/04_ocean_horizon.jpg" alt="Ocean Horizon"/><span>03 · Ocean Horizon</span></div>
-      <div class="wp-card" data-wp="4" onclick="setWallpaperByIndex(4)"><img src="assets/05_cyber_synthwave.jpg" alt="Cyber Synthwave"/><span>04 · Cyber Synthwave</span></div>
-      <div class="wp-card" data-wp="5" onclick="setWallpaperByIndex(5)"><img src="assets/13_cosmic_nebula.jpg" alt="Cosmic Nebula"/><span>05 · Cosmic Nebula</span></div>
-      <div class="wp-card" data-wp="6" onclick="setWallpaperByIndex(6)"><img src="assets/17_midnight_fjord.jpg" alt="Midnight Fjord"/><span>06 · Midnight Fjord</span></div>
-      <div class="wp-card" data-wp="7" onclick="setWallpaperByIndex(7)"><img src="assets/25_golden_hour_bay.jpg" alt="Golden Hour Bay"/><span>07 · Golden Hour Bay</span></div>
-      <div class="wp-card" data-wp="8" onclick="setWallpaperByIndex(8)"><img src="assets/27_cobalt_velocity.jpg" alt="Cobalt Velocity"/><span>08 · Cobalt Velocity</span></div>
+    <div class="sec-head">
+      <h2>40 Live Wallpapers + 48 Lossless 2K Backgrounds</h2>
+      <p>Select directly from Appearance, Quick Live Picker, or <code>lunar-live-wallpaper start &lt;id&gt;</code>. Click any preview below to load it in the VM above.</p>
+    </div>
+    <div class="cards-3">
+      <div class="wp-card" data-vm-wp="moon"><img src="assets/live/33_black_hole_accretion.png" alt="Gargantua Event Horizon"><div class="wp-meta"><span>33. Gargantua Event Horizon</span><span class="badge new">NEW v1.0.25</span></div></div>
+      <div class="wp-card" data-vm-wp="aurora"><img src="assets/live/36_plasma_nebula_vortex.png" alt="Plasma Chromatic Vortex"><div class="wp-meta"><span>36. Plasma Chromatic Vortex</span><span class="badge new">NEW v1.0.25</span></div></div>
+      <div class="wp-card" data-vm-wp="bio"><img src="assets/live/39_bioluminescent_jellyfish.png" alt="Abyssal Medusae"><div class="wp-meta"><span>39. Abyssal Medusae</span><span class="badge new">NEW v1.0.25</span></div></div>
+      <div class="wp-card" data-vm-wp="bio"><img src="assets/live/01_lunar_eclipse.png" alt="Lunar Eclipse"><div class="wp-meta"><span>01. Lunar Eclipse</span><span class="badge">WEBGL UPGRADED</span></div></div>
+      <div class="wp-card" data-vm-wp="aurora"><img src="assets/live/02_aurora_borealis.png" alt="Aurora Borealis"><div class="wp-meta"><span>02. Aurora Borealis</span><span class="badge">WEBGL UPGRADED</span></div></div>
+      <div class="wp-card" data-vm-wp="warp"><img src="assets/live/20_hyperspace_warp.png" alt="Hyperspace Warp"><div class="wp-meta"><span>20. Hyperspace Warp</span><span class="badge">WEBGL UPGRADED</span></div></div>
+      <div class="wp-card" data-vm-wp="moon"><img src="assets/live/25_crimson_moonrise.png" alt="Crimson Moonrise"><div class="wp-meta"><span>25. Crimson Moonrise</span><span class="badge">UPGRADED</span></div></div>
+      <div class="wp-card" data-vm-wp="hex"><img src="assets/live/28_cyber_hex_grid.png" alt="Cyber Hex Grid"><div class="wp-meta"><span>28. Cyber Hex Grid</span><span class="badge">UPGRADED</span></div></div>
+      <div class="wp-card" data-vm-wp="pulsar"><img src="assets/live/30_deep_space_pulsar.png" alt="Deep Space Pulsar"><div class="wp-meta"><span>30. Deep Space Pulsar</span><span class="badge">WEBGL UPGRADED</span></div></div>
     </div>
   </section>
 
+  <!-- Lunar DE Connect & Android App Section -->
+  <section id="connect-section" class="container">
+    <div class="sec-head">
+      <h2>Lunar DE Connect (Desktop Daemon + Kotlin Compose Android App)</h2>
+      <p>Built on LAN UDP discovery + automatic <strong>Tailscale</strong> &amp; Remote HTTPS failover with Saved Connections, 60 Hz UDP touchpad, opt-in Desktop Screen Viewer, live <code>lunar-notify</code> notification mirroring, and <code>lunar-win</code> background window routing.</p>
+    </div>
+    <div class="cards-3">
+      <div class="feature-card">
+        <h3>Saved PCs &amp; Tailscale Failover</h3>
+        <p>Pair once via PIN or multi-endpoint <code>lunar-connect://</code> QR URI and save multiple PCs with nicknames &amp; tokens for 1-tap connect/switch across LAN, Tailscale IP, MagicDNS, and Remote HTTPS.</p>
+      </div>
+      <div class="feature-card">
+        <h3>Notification Mirroring &amp; DND</h3>
+        <p>Dedicated <strong>Alerts</strong> tab mirrors desktop notifications from <code>lunar-notify</code> via <code>/notifications</code>, lets you dismiss individual alerts or Clear All on your PC, and toggles desktop Do Not Disturb remotely.</p>
+      </div>
+      <div class="feature-card">
+        <h3>60 Hz UDP Mouse &amp; Opt-In Screen</h3>
+        <p>Ultra-low-latency UDP touchpad + scroll, MPRIS media &amp; clipboard sync, opt-in multi-monitor Desktop Screen Viewer (0 B when off, 1-shot snapshots, tap-to-click), and background <code>lunar-win</code> input.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Installation -->
   <section id="install" class="container">
-    <h2>Installation</h2>
-    <p class="section-desc">
-      Install directly from Lunar DE's self-hosted GitHub Pages APT repository for automatic updates before login, or build locally from source.
-    </p>
-
-    <div class="install-tabs" role="tablist">
-      <button class="install-tab active" id="tab-apt" type="button" onclick="switchInstallTab('apt')">
-        Easy Install (Zorin OS 18 / Ubuntu 24.04 — Auto-updates on reboot)
-      </button>
-      <button class="install-tab" id="tab-source" type="button" onclick="switchInstallTab('source')">
-        Build from Source / Xephyr Dev
-      </button>
+    <div class="sec-head">
+      <h2>Install &amp; Upgrade on Ubuntu / Debian</h2>
+      <p>Single-command APT installation with automatic updates enabled.</p>
     </div>
+    <pre class="code-block">curl -fsSL https://lunar-entertainment.github.io/Lunar_DE/install.sh | sudo bash
 
-    <div class="install-panel active" id="panel-apt">
-      <div class="code-wrap">
-        <pre><code id="code-apt">curl -fsSL https://lunar-entertainment.github.io/Lunar_DE/install.sh | sudo bash</code></pre>
-        <button class="copy-btn" type="button" onclick="copyCode('code-apt', this)">Copy</button>
-      </div>
-      <p class="install-note">
-        Installs the archive keyring, enables the <code>noble main</code> APT repository, installs <code>lunar-de</code>, and activates <code>lunar-de-autoupdate.service</code> for seamless updates on reboot.
-      </p>
-    </div>
-
-    <div class="install-panel" id="panel-source">
-      <div class="code-wrap">
-        <pre><code id="code-source">git clone https://github.com/Lunar-Entertainment/Lunar_DE.git
-cd Lunar_DE
-
-# Test live in Xephyr (single monitor or 2 virtual RandR monitors)
-./run_dev.sh
-./run_dev.sh -m 2
-
-# Install locally from source
-./install.sh</code></pre>
-        <button class="copy-btn" type="button" onclick="copyCode('code-source', this)">Copy</button>
-      </div>
-      <p class="install-note">
-        Requires <code>cmake</code>, <code>g++</code> (C++20), <code>libxcb*</code>, <code>libxcb-randr0-dev</code>, <code>libjpeg-dev</code>, <code>libpng-dev</code>, <code>libfreetype-dev</code>, and <code>Xephyr</code> for nested testing.
-      </p>
-    </div>
+# Launch the isolated Testing Sandbox anytime:
+lunar-settings --page testing
+# Launch the skinned terminal or Android Connect daemon:
+lunar-terminal &amp;
+lunar-connect start</pre>
   </section>
 
+  <!-- Keyboard Shortcuts -->
   <section id="shortcuts" class="container">
-    <h2>Keyboard Shortcuts</h2>
-    <table>
-      <thead>
-        <tr><th>Shortcut</th><th>Action</th></tr>
-      </thead>
-      <tbody>
-        <tr><td><kbd>Super</kbd></td><td>Open / close App Menu</td></tr>
-        <tr><td><kbd>Super</kbd> + <kbd>G</kbd></td><td>Open Gemini Live voice assistant</td></tr>
-        <tr><td><kbd>Super</kbd> + <kbd>Return</kbd></td><td>Launch terminal</td></tr>
-        <tr><td><kbd>Super</kbd> + <kbd>Up</kbd> / <kbd>Down</kbd></td><td>Maximize / restore focused window</td></tr>
-        <tr><td><kbd>Super</kbd> + <kbd>Left</kbd> / <kbd>Right</kbd></td><td>Snap window to left / right half</td></tr>
-        <tr><td><kbd>Super</kbd> + <kbd>F</kbd></td><td>Toggle fullscreen</td></tr>
-        <tr><td><kbd>Alt</kbd> + <kbd>Tab</kbd> / <kbd>Super</kbd> + <kbd>Tab</kbd></td><td>Cycle window focus</td></tr>
-        <tr><td><kbd>Super</kbd> + <kbd>Q</kbd> / <kbd>Alt</kbd> + <kbd>F4</kbd></td><td>Close focused window</td></tr>
-        <tr><td><kbd>Super</kbd> + <kbd>Escape</kbd></td><td>Exit Lunar DE session cleanly</td></tr>
-      </tbody>
-    </table>
-  </section>
-
-  <footer>
-    <div class="container">
-      Lunar DE · Built in C++20 with libxcb · <a href="https://github.com/Lunar-Entertainment/Lunar_DE">github.com/Lunar-Entertainment/Lunar_DE</a>
+    <div class="sec-head">
+      <h2>Essential Shortcuts &amp; Command Palette</h2>
     </div>
-  </footer>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Shortcut / Trigger</th><th>Action</th></tr></thead>
+        <tbody>
+          <tr><td><kbd>Super</kbd> + <kbd>1</kbd>–<kbd>4</kbd></td><td>Switch Virtual Workspace (or scroll mouse wheel on panel workspace pills)</td></tr>
+          <tr><td><kbd>Super</kbd> + <kbd>Shift</kbd> + <kbd>1</kbd>–<kbd>4</kbd></td><td>Move Focused Window to Workspace 1–4</td></tr>
+          <tr><td><kbd>Super</kbd> + <kbd>Ctrl</kbd> + <kbd>Left</kbd> / <kbd>Right</kbd></td><td>Cycle Previous / Next Virtual Workspace</td></tr>
+          <tr><td><kbd>Alt</kbd> + <kbd>Tab</kbd> / <kbd>Alt</kbd> + <kbd>Shift</kbd> + <kbd>Tab</kbd></td><td>Visual Glassmorphism Window Switcher Overlay</td></tr>
+          <tr><td><kbd>Alt</kbd> + <kbd>F2</kbd></td><td>Command Palette (<code>test</code>, <code>whatsnew</code>, <code>connect</code>, <code>term</code>, <code>livewpgrid</code>, <code>shot</code>, <code>rec</code>)</td></tr>
+          <tr><td><kbd>Super</kbd></td><td>Full-Screen Frosted App Menu (toggleable in Settings)</td></tr>
+          <tr><td><kbd>Super</kbd> + <kbd>Shift</kbd> + <kbd>G</kbd></td><td>Toggle Gemini Live Voice + Screen Vision</td></tr>
+          <tr><td><kbd>Super</kbd> + <kbd>Return</kbd></td><td>Open Custom Skinned Lunar Terminal</td></tr>
+          <tr><td><kbd>Super</kbd> + <kbd>Left</kbd> / <kbd>Right</kbd></td><td>Aero Snap window half-screen</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</main>
 
-  <script>
-    const WALLPAPERS = [
-      { id: 1, name: 'Lunar Eclipse', src: 'assets/01_lunar_eclipse.jpg' },
-      { id: 2, name: 'Nordic Aurora', src: 'assets/02_nordic_aurora.jpg' },
-      { id: 3, name: 'Ocean Horizon', src: 'assets/04_ocean_horizon.jpg' },
-      { id: 4, name: 'Cyber Synthwave', src: 'assets/05_cyber_synthwave.jpg' },
-      { id: 5, name: 'Cosmic Nebula', src: 'assets/13_cosmic_nebula.jpg' },
-      { id: 6, name: 'Midnight Fjord', src: 'assets/17_midnight_fjord.jpg' },
-      { id: 7, name: 'Golden Hour Bay', src: 'assets/25_golden_hour_bay.jpg' },
-      { id: 8, name: 'Cobalt Velocity', src: 'assets/27_cobalt_velocity.jpg' }
-    ];
+<footer>
+  <div class="container">
+    Lunar DE v1.0.25 — Modular C++20 X11 Desktop Environment • Hosted on GitHub Pages
+  </div>
+</footer>
 
-    const canvas = document.getElementById('desktop-canvas');
-    const mockBar = document.getElementById('mock-bar');
-    const snapPreview = document.getElementById('snap-preview');
-    const appMenu = document.getElementById('vm-app-menu');
-    const launcherBtn = document.getElementById('vm-launcher-btn');
-    const termOutput = document.getElementById('term-output');
-    const termInput = document.getElementById('term-input');
-    const termBody = document.getElementById('vm-term-body');
+<div id="vmToast"></div>
 
-    let currentLayout = 'top';
-    let currentWpIndex = 1;
-    let topZ = 15;
-    let activeWinId = 'terminal';
+<script>
+(() => {
+  // Mobile menu toggle
+  const mobBtn = document.getElementById('mobileMenuBtn');
+  const mobDrawer = document.getElementById('mobileNavDrawer');
+  mobBtn.addEventListener('click', () => {
+    const open = mobDrawer.classList.toggle('open');
+    mobBtn.setAttribute('aria-expanded', String(open));
+  });
+  mobDrawer.querySelectorAll('a').forEach(a => a.addEventListener('click', () => mobDrawer.classList.remove('open')));
 
-    const windows = {
-      terminal: {
-        id: 'terminal',
-        title: 'Terminal',
-        el: document.getElementById('win-terminal'),
-        closed: false,
-        minimized: false,
-        snapState: null, // null | 'max' | 'left' | 'right'
-        rect: { x: 112, y: 46, w: 540, h: 310 },
-        savedRect: { x: 112, y: 46, w: 540, h: 310 }
-      },
-      appearance: {
-        id: 'appearance',
-        title: 'Appearance Settings',
-        el: document.getElementById('win-appearance'),
-        closed: true,
-        minimized: false,
-        snapState: null,
-        rect: { x: 250, y: 72, w: 430, h: 315 },
-        savedRect: { x: 250, y: 72, w: 430, h: 315 }
-      }
+  // Toast helper
+  const toastEl = document.getElementById('vmToast');
+  let toastTimer = null;
+  function showToast(msg) {
+    toastEl.textContent = msg;
+    toastEl.style.display = 'block';
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { toastEl.style.display = 'none'; }, 2400);
+  }
+
+  // Per-Instance VM State Manager
+  const SCENARIOS = [
+    { id: 'whats_new_v122', title: "What's New in v1.0.22", isNew: true, desc: 'lunar-notify D-Bus toasts, Notification Center + DND & Android alert mirroring' },
+    { id: 'lunar_notify_center', title: 'lunar-notify & DND Drawer', isNew: true, desc: 'Stacked ARGB toasts, bell unread badge, Do Not Disturb & Clear All' },
+    { id: 'connect_demo', title: 'Lunar DE Connect v1.0.22', isNew: true, desc: 'Mirrored alerts, 60 Hz UDP mouse, opt-in screen view & Saved PCs' },
+    { id: 'live_wallpapers_new', title: '40 Live Wallpapers', isNew: true, desc: 'Gargantua Black Hole, Plasma Vortex, Abyssal Medusae, WebGL Aurora & Warp' },
+    { id: 'per_monitor_pause', title: 'Per-Monitor Pause', isNew: true, desc: 'Fullscreening Monitor 1 pauses M1 only; M2 stays alive' },
+    { id: 'frosted_app_grid', title: 'Frosted Live App Menu', isNew: true, desc: '32-bit ARGB Super Overview over active live canvas' },
+    { id: 'lunar_terminal_skin', title: 'Lunar Terminal Skins', isNew: true, desc: '5 translucent RGBA themes & custom prompt' },
+    { id: 'bg_virtual_input', title: 'lunar-win Game Input', isNew: true, desc: 'XInput2 + virtual ClientPointer for SDL2/GLFW/Unity/Wine games' },
+    { id: 'layouts_and_aero_snap', title: '6 Panel Layouts', isNew: false, desc: 'Top bar, Bottom Taskbar, Floating Dock, Classic & Compact' },
+  ];
+
+  let nextInstId = 1;
+  const instances = [];
+  let activeIdx = 0;
+
+  function createInstance(label) {
+    const id = nextInstId++;
+    return {
+      id,
+      name: label || `VM #${id}`,
+      engine: 'A',
+      dualMonitors: false,
+      panelGlass: true,
+      layout: 'taskbar',
+      liveScene: id % 2 ? 'aurora' : 'warp',
+      m1Fullscreen: false,
+      appGridOpen: false,
+      activeApp: 'testing', // 'testing' | 'terminal' | 'lunar-win'
+      filterLatestOnly: false,
+      termTheme: 'midnight',
+      termLogs: ['lunar ~/Lunar_DE ❯ lunar-terminal --theme midnight', 'Ready. Try: help | theme aurora | live warp | lunar-win sober "w"'],
+      bgAppLog: ['[sober background buffer ready] Waiting for lunar-win virtual input...'],
+      fgFocusText: 'Typing here stays uninterrupted while lunar-win drives sober!',
+      volume: 74,
+      v86Booted: false,
     };
+  }
+  instances.push(createInstance('VM #1 (Primary)'));
 
-    function getWorkarea() {
-      const cw = canvas.clientWidth || 880;
-      const ch = canvas.clientHeight || 495;
-      if (currentLayout === 'taskbar') {
-        return { x: 0, y: 0, w: cw, h: Math.max(220, ch - 44), top: 0, bottom: ch - 44 };
+  const vmTabsBar = document.getElementById('vmTabsBar');
+  const engineBtnA = document.getElementById('engineBtnA');
+  const engineBtnB = document.getElementById('engineBtnB');
+  const dualHeadBtn = document.getElementById('dualHeadBtn');
+  const panelGlassBtn = document.getElementById('panelGlassBtn');
+  const vmLayoutSelect = document.getElementById('vmLayoutSelect');
+  const vmLiveSelect = document.getElementById('vmLiveSelect');
+  const vmAppGridBtn = document.getElementById('vmAppGridBtn');
+  const engineAPane = document.getElementById('engineAPane');
+  const engineBPane = document.getElementById('engineBPane');
+  const vmMonSplit = document.getElementById('vmMonSplit');
+  const vmMon1 = document.getElementById('vmMon1');
+  const vmPanel = document.getElementById('vmPanel');
+  const panelLayoutTag = document.getElementById('panelLayoutTag');
+  const pausePill0 = document.getElementById('pausePill0');
+  const vmWinTitle = document.getElementById('vmWinTitle');
+  const vmWinBody = document.getElementById('vmWinBody');
+  const vmAppGrid = document.getElementById('vmAppGrid');
+  const phonePairedBadge = document.getElementById('phonePairedBadge');
+  const phoneVolSlider = document.getElementById('phoneVolSlider');
+  const phoneVolLbl = document.getElementById('phoneVolLbl');
+
+  function curVM() { return instances[activeIdx] || instances[0]; }
+
+  function renderTabs() {
+    vmTabsBar.innerHTML = '';
+    instances.forEach((inst, idx) => {
+      const btn = document.createElement('button');
+      btn.className = 'vm-tab' + (idx === activeIdx ? ' active' : '');
+      btn.innerHTML = `<span>🖥️ ${inst.name}</span>`;
+      btn.addEventListener('click', () => { activeIdx = idx; syncUI(); });
+      if (instances.length > 1) {
+        const x = document.createElement('span');
+        x.className = 'vm-tab-close';
+        x.textContent = '×';
+        x.addEventListener('click', (e) => {
+          e.stopPropagation();
+          instances.splice(idx, 1);
+          activeIdx = Math.max(0, Math.min(activeIdx, instances.length - 1));
+          syncUI();
+        });
+        btn.appendChild(x);
       }
-      return { x: 0, y: 30, w: cw, h: Math.max(220, ch - 30), top: 30, bottom: ch };
-    }
+      vmTabsBar.appendChild(btn);
+    });
+    const addBtn = document.createElement('button');
+    addBtn.className = 'chip-btn active';
+    addBtn.textContent = '+ New VM Instance';
+    addBtn.addEventListener('click', () => {
+      instances.push(createInstance());
+      activeIdx = instances.length - 1;
+      syncUI();
+      showToast(`Spawned isolated ${curVM().name}`);
+    });
+    vmTabsBar.appendChild(addBtn);
+  }
 
-    function clampRect(r, wa) {
-      const minW = 270, minH = 170;
-      const w = Math.max(minW, Math.min(r.w, wa.w));
-      const h = Math.max(minH, Math.min(r.h, wa.h));
-      const x = Math.max(wa.x, Math.min(r.x, wa.x + wa.w - w));
-      const y = Math.max(wa.y, Math.min(r.y, wa.y + wa.h - h));
-      return { x, y, w, h };
-    }
-
-    function applyWindowRect(w) {
-      const wa = getWorkarea();
-      let r = w.rect;
-      w.el.classList.toggle('maximized', w.snapState === 'max');
-      if (w.snapState === 'max') {
-        r = { x: wa.x, y: wa.y, w: wa.w, h: wa.h };
-      } else if (w.snapState === 'left') {
-        r = { x: wa.x + 6, y: wa.y + 6, w: Math.floor(wa.w / 2) - 9, h: wa.h - 12 };
-      } else if (w.snapState === 'right') {
-        const hw = Math.floor(wa.w / 2) - 9;
-        r = { x: wa.x + wa.w - hw - 6, y: wa.y + 6, w: hw, h: wa.h - 12 };
-      } else {
-        r = clampRect(r, wa);
-      }
-      w.rect = r;
-      w.el.style.left = r.x + 'px';
-      w.el.style.top = r.y + 'px';
-      w.el.style.width = r.w + 'px';
-      w.el.style.height = r.h + 'px';
-    }
-
-    function focusWindow(id) {
-      activeWinId = id;
-      Object.values(windows).forEach((w) => {
-        w.el.classList.toggle('focused', w.id === id);
-      });
-      if (windows[id]) {
-        windows[id].el.style.zIndex = String(++topZ);
-      }
-      renderTaskbarPills();
-    }
-
-    function renderWindow(w) {
-      const visible = !w.closed && !w.minimized;
-      w.el.classList.toggle('hidden', !visible);
-      if (visible) applyWindowRect(w);
-      renderTaskbarPills();
-    }
-
-    function renderTaskbarPills() {
-      const barLeft = document.getElementById('bar-left');
-      const barCenter = document.getElementById('bar-center');
-      const pillsEl = document.getElementById('task-pills-left');
-      if (currentLayout === 'taskbar') {
-        if (pillsEl.parentElement !== barCenter) barCenter.appendChild(pillsEl);
-      } else {
-        if (pillsEl.parentElement !== barLeft) barLeft.appendChild(pillsEl);
-      }
-      pillsEl.innerHTML = '';
-      Object.values(windows).forEach((w) => {
-        if (w.closed) return;
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'task-pill' +
-          (!w.minimized && activeWinId === w.id ? ' active' : '') +
-          (w.minimized ? ' minimized' : '');
-        btn.textContent = w.title;
-        btn.onclick = () => {
-          closeAppMenu();
-          if (w.minimized) {
-            w.minimized = false;
-            renderWindow(w);
-            focusWindow(w.id);
-          } else if (activeWinId === w.id) {
-            w.minimized = true;
-            renderWindow(w);
-          } else {
-            focusWindow(w.id);
-          }
+  function renderWinContent() {
+    const vm = curVM();
+    if (vm.activeApp === 'testing') {
+      vmWinTitle.textContent = `Lunar Settings — Testing Tab (${vm.name})`;
+      const list = SCENARIOS.filter(s => !vm.filterLatestOnly || s.isNew);
+      vmWinBody.innerHTML = `
+        <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;justify-content:space-between;margin-bottom:10px;">
+          <div style="display:flex;gap:6px;">
+            <button id="vmFilterAll" class="chip-btn ${!vm.filterLatestOnly ? 'active' : ''}">All Features (${SCENARIOS.length})</button>
+            <button id="vmFilterNew" class="chip-btn ${vm.filterLatestOnly ? 'active' : ''}">Latest Update Only v1.0.25 (${SCENARIOS.filter(s=>s.isNew).length})</button>
+          </div>
+          <span style="font-size:11px;color:var(--emerald);">Isolated VM State • Zero Host Changes</span>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px;">
+          ${list.map(s => `
+            <div style="padding:10px;border-radius:10px;background:rgba(255,255,255,0.04);border:1px solid var(--border);display:flex;flex-direction:column;gap:6px;">
+              <div style="display:flex;justify-content:space-between;gap:4px;align-items:center;">
+                <strong style="font-size:12px;">${s.title}</strong>
+                <span class="badge ${s.isNew ? 'new' : ''}">${s.isNew ? 'NEW' : 'CORE'}</span>
+              </div>
+              <span style="font-size:11px;color:var(--muted);">${s.desc}</span>
+              <button class="chip-btn active" data-run-sc="${s.id}">Run in ${vm.name}</button>
+            </div>
+          `).join('')}
+        </div>`;
+      vmWinBody.querySelector('#vmFilterAll').onclick = () => { vm.filterLatestOnly = false; renderWinContent(); };
+      vmWinBody.querySelector('#vmFilterNew').onclick = () => { vm.filterLatestOnly = true; renderWinContent(); };
+      vmWinBody.querySelectorAll('[data-run-sc]').forEach(b => {
+        b.onclick = () => {
+          const sc = b.getAttribute('data-run-sc');
+          if (sc === 'per_monitor_pause') { vm.dualMonitors = true; vm.m1Fullscreen = true; }
+          else if (sc === 'frosted_app_grid') { vm.appGridOpen = true; }
+          else if (sc === 'lunar_terminal_skin') { vm.activeApp = 'terminal'; vm.termTheme = 'cyber'; }
+          else if (sc === 'bg_virtual_input') { vm.activeApp = 'lunar-win'; }
+          else if (sc === 'live_wallpapers_new') { vm.liveScene = 'warp'; }
+          syncUI();
+          showToast(`${vm.name}: executed scenario "${sc}"`);
         };
-        pillsEl.appendChild(btn);
       });
-    }
-
-    function snapTargetRect(zone) {
-      const wa = getWorkarea();
-      if (zone === 'top') return { x: wa.x + 6, y: wa.y + 6, w: wa.w - 12, h: wa.h - 12 };
-      if (zone === 'left') return { x: wa.x + 6, y: wa.y + 6, w: Math.floor(wa.w / 2) - 9, h: wa.h - 12 };
-      if (zone === 'right') {
-        const hw = Math.floor(wa.w / 2) - 9;
-        return { x: wa.x + wa.w - hw - 6, y: wa.y + 6, w: hw, h: wa.h - 12 };
-      }
-      return null;
-    }
-
-    function showSnapPreview(zone) {
-      const r = zone ? snapTargetRect(zone) : null;
-      if (!r) {
-        snapPreview.classList.remove('visible');
-        return;
-      }
-      snapPreview.style.left = r.x + 'px';
-      snapPreview.style.top = r.y + 'px';
-      snapPreview.style.width = r.w + 'px';
-      snapPreview.style.height = r.h + 'px';
-      snapPreview.classList.add('visible');
-    }
-
-    function toggleMaximize(id) {
-      const w = windows[id];
-      if (!w) return;
-      if (w.snapState === 'max') {
-        w.snapState = null;
-        w.rect = { ...w.savedRect };
-      } else {
-        if (!w.snapState) w.savedRect = { ...w.rect };
-        w.snapState = 'max';
-      }
-      renderWindow(w);
-      focusWindow(id);
-    }
-
-    function vmLaunchApp(id) {
-      closeAppMenu();
-      const w = windows[id];
-      if (!w) return;
-      w.closed = false;
-      w.minimized = false;
-      renderWindow(w);
-      focusWindow(id);
-      if (id === 'terminal') termInput.focus();
-    }
-
-    function closeAppMenu() {
-      appMenu.classList.remove('open');
-      launcherBtn.classList.remove('active');
-    }
-
-    function toggleAppMenu(e) {
-      if (e) e.stopPropagation();
-      const open = appMenu.classList.toggle('open');
-      launcherBtn.classList.toggle('active', open);
-    }
-
-    function setLayout(mode) {
-      currentLayout = mode === 'taskbar' ? 'taskbar' : 'top';
-      document.getElementById('btn-top').classList.toggle('active', currentLayout === 'top');
-      document.getElementById('btn-taskbar').classList.toggle('active', currentLayout === 'taskbar');
-      document.getElementById('vm-card-top').classList.toggle('active', currentLayout === 'top');
-      document.getElementById('vm-card-taskbar').classList.toggle('active', currentLayout === 'taskbar');
-
-      canvas.classList.toggle('mode-taskbar', currentLayout === 'taskbar');
-      canvas.classList.toggle('mode-top', currentLayout === 'top');
-      mockBar.className = 'mock-bar ' + currentLayout;
-
-      appMenu.classList.toggle('pos-taskbar', currentLayout === 'taskbar');
-      appMenu.classList.toggle('pos-top', currentLayout === 'top');
-
-      const barLeft = document.getElementById('bar-left');
-      const barCenter = document.getElementById('bar-center');
-      const barRight = document.querySelector('.bar-right');
-      const clockMain = document.getElementById('mock-clock');
-      const clockRight = document.getElementById('mock-clock-right');
-
-      if (currentLayout === 'taskbar') {
-        if (launcherBtn.parentElement !== barCenter) barCenter.prepend(launcherBtn);
-        clockMain.style.display = 'none';
-        clockRight.style.display = 'inline';
-        clockRight.textContent = clockMain.textContent;
-      } else {
-        if (launcherBtn.parentElement !== barLeft) barLeft.prepend(launcherBtn);
-        clockMain.style.display = 'inline';
-        clockRight.style.display = 'none';
-      }
-
-      Object.values(windows).forEach((w) => {
-        if (!w.closed && !w.minimized) applyWindowRect(w);
-      });
-      renderTaskbarPills();
-    }
-
-    function setWallpaperByIndex(idx) {
-      const wp = WALLPAPERS.find((item) => item.id === Number(idx)) || WALLPAPERS[0];
-      currentWpIndex = wp.id;
-      canvas.style.backgroundImage = "url('" + wp.src + "')";
-      document.querySelectorAll('#wp-gallery .wp-card').forEach((card) => {
-        card.classList.toggle('active', Number(card.dataset.wp) === wp.id);
-      });
-      document.querySelectorAll('#vm-wp-mini-grid .vm-wp-mini').forEach((btn) => {
-        btn.classList.toggle('active', Number(btn.dataset.wp) === wp.id);
-      });
-      return wp;
-    }
-
-    function vmCycleWallpaper() {
-      const next = (currentWpIndex % WALLPAPERS.length) + 1;
-      setWallpaperByIndex(next);
-    }
-
-    function initAppearanceGrid() {
-      const grid = document.getElementById('vm-wp-mini-grid');
-      WALLPAPERS.forEach((wp) => {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'vm-wp-mini' + (wp.id === 1 ? ' active' : '');
-        btn.dataset.wp = String(wp.id);
-        btn.title = wp.name;
-        btn.onclick = () => setWallpaperByIndex(wp.id);
-        const img = document.createElement('img');
-        img.src = wp.src;
-        img.alt = wp.name;
-        btn.appendChild(img);
-        grid.appendChild(btn);
-      });
-    }
-
-    // Drag, Resize, Snap, Double-Click & Controls
-    function setupWindowInteractions() {
-      Object.values(windows).forEach((w) => {
-        w.el.addEventListener('pointerdown', () => focusWindow(w.id));
-
-        const titlebar = w.el.querySelector('.vm-titlebar');
-        titlebar.addEventListener('dblclick', (e) => {
-          if (e.target.closest('.vm-win-btn')) return;
-          toggleMaximize(w.id);
-        });
-
-        w.el.querySelectorAll('.vm-win-btn').forEach((btn) => {
-          btn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const act = btn.dataset.action;
-            if (act === 'min') {
-              w.minimized = true;
-              renderWindow(w);
-            } else if (act === 'max') {
-              toggleMaximize(w.id);
-            } else if (act === 'close') {
-              w.closed = true;
-              renderWindow(w);
-            }
-          });
-        });
-
-        titlebar.addEventListener('pointerdown', (e) => {
-          if (e.button !== 0 || e.target.closest('.vm-win-btn')) return;
-          e.preventDefault();
-          focusWindow(w.id);
-          closeAppMenu();
-
-          const startX = e.clientX;
-          const startY = e.clientY;
-          let originRect = { ...w.rect };
-          let wasMax = (w.snapState === 'max');
-          let unmaxed = false;
-          let snapZone = null;
-
-          titlebar.setPointerCapture(e.pointerId);
-
-          const onMove = (mv) => {
-            const dx = mv.clientX - startX;
-            const dy = mv.clientY - startY;
-            const cRect = canvas.getBoundingClientRect();
-            const relX = mv.clientX - cRect.left;
-            const relY = mv.clientY - cRect.top;
-            const wa = getWorkarea();
-
-            if (wasMax && !unmaxed) {
-              if (Math.hypot(dx, dy) < 5) return;
-              unmaxed = true;
-              w.snapState = null;
-              const rw = w.savedRect.w || 460;
-              const rh = w.savedRect.h || 280;
-              originRect = {
-                x: Math.max(wa.x, Math.min(relX - rw / 2, wa.x + wa.w - rw)),
-                y: Math.max(wa.y, relY - 14),
-                w: rw,
-                h: rh
-              };
-            } else if (!wasMax && w.snapState) {
-              if (Math.hypot(dx, dy) >= 5) w.snapState = null;
-            }
-
-            if (!wasMax || unmaxed) {
-              w.el.classList.remove('maximized');
-              const nx = Math.max(-originRect.w + 80, Math.min(originRect.x + dx, wa.w - 80));
-              const ny = Math.max(wa.y, Math.min(originRect.y + dy, wa.bottom - 30));
-              w.rect = { x: nx, y: ny, w: originRect.w, h: originRect.h };
-              w.el.style.left = nx + 'px';
-              w.el.style.top = ny + 'px';
-              w.el.style.width = originRect.w + 'px';
-              w.el.style.height = originRect.h + 'px';
-
-              if (relY <= wa.top + 16) snapZone = 'top';
-              else if (relX <= 16) snapZone = 'left';
-              else if (relX >= wa.w - 16) snapZone = 'right';
-              else snapZone = null;
-              showSnapPreview(snapZone);
-            }
-          };
-
-          const onUp = () => {
-            titlebar.removeEventListener('pointermove', onMove);
-            titlebar.removeEventListener('pointerup', onUp);
-            titlebar.removeEventListener('pointercancel', onUp);
-            showSnapPreview(null);
-            if (snapZone) {
-              if (!w.snapState) w.savedRect = { ...w.rect };
-              w.snapState = snapZone === 'top' ? 'max' : snapZone;
-              applyWindowRect(w);
-            } else if (!w.snapState) {
-              w.savedRect = { ...w.rect };
-            }
-          };
-
-          titlebar.addEventListener('pointermove', onMove);
-          titlebar.addEventListener('pointerup', onUp);
-          titlebar.addEventListener('pointercancel', onUp);
-        });
-
-        // 8-direction resize handles
-        w.el.querySelectorAll('.vm-rz').forEach((handle) => {
-          handle.addEventListener('pointerdown', (e) => {
-            if (e.button !== 0 || w.snapState === 'max') return;
-            e.preventDefault();
-            e.stopPropagation();
-            focusWindow(w.id);
-            const dir = handle.dataset.dir;
-            const startX = e.clientX;
-            const startY = e.clientY;
-            const startR = { ...w.rect };
-            w.snapState = null;
-
-            handle.setPointerCapture(e.pointerId);
-
-            const onMove = (mv) => {
-              const dx = mv.clientX - startX;
-              const dy = mv.clientY - startY;
-              const wa = getWorkarea();
-              const minW = 270, minH = 170;
-
-              let left = startR.x;
-              let top = startR.y;
-              let right = startR.x + startR.w;
-              let bottom = startR.y + startR.h;
-
-              if (dir.includes('e')) right = Math.min(wa.x + wa.w, Math.max(left + minW, startR.x + startR.w + dx));
-              if (dir.includes('s')) bottom = Math.min(wa.bottom, Math.max(top + minH, startR.y + startR.h + dy));
-              if (dir.includes('w')) left = Math.max(wa.x, Math.min(right - minW, startR.x + dx));
-              if (dir.includes('n')) top = Math.max(wa.y, Math.min(bottom - minH, startR.y + dy));
-
-              w.rect = { x: left, y: top, w: right - left, h: bottom - top };
-              w.savedRect = { ...w.rect };
-              w.el.style.left = w.rect.x + 'px';
-              w.el.style.top = w.rect.y + 'px';
-              w.el.style.width = w.rect.w + 'px';
-              w.el.style.height = w.rect.h + 'px';
-            };
-
-            const onUp = () => {
-              handle.removeEventListener('pointermove', onMove);
-              handle.removeEventListener('pointerup', onUp);
-              handle.removeEventListener('pointercancel', onUp);
-            };
-
-            handle.addEventListener('pointermove', onMove);
-            handle.addEventListener('pointerup', onUp);
-            handle.addEventListener('pointercancel', onUp);
-          });
-        });
-      });
-
-      // Desktop icon selection & double-click launch
-      document.querySelectorAll('.vm-dicon').forEach((icon) => {
-        icon.addEventListener('click', (e) => {
-          e.stopPropagation();
-          closeAppMenu();
-          document.querySelectorAll('.vm-dicon').forEach((b) => b.classList.remove('selected'));
-          icon.classList.add('selected');
-        });
-        icon.addEventListener('dblclick', (e) => {
-          e.stopPropagation();
-          vmLaunchApp(icon.dataset.app);
-        });
-      });
-
-      canvas.addEventListener('click', (e) => {
-        if (!e.target.closest('.vm-app-menu') && !e.target.closest('.launcher-btn')) {
-          closeAppMenu();
-        }
-        if (!e.target.closest('.vm-dicon')) {
-          document.querySelectorAll('.vm-dicon').forEach((b) => b.classList.remove('selected'));
-        }
-      });
-    }
-
-    // Interactive Terminal
-    const cmdHistory = [];
-    let historyIdx = -1;
-
-    function printTerm(text, cls) {
-      const div = document.createElement('div');
-      div.className = 'term-line' + (cls ? ' ' + cls : '');
-      div.textContent = text;
-      termOutput.appendChild(div);
-      termBody.scrollTop = termBody.scrollHeight;
-    }
-
-    function runTermCommand(raw) {
-      const cmd = raw.trim();
-      printTerm('lunar@de:~$ ' + cmd, 'term-green');
-      if (!cmd) return;
-
-      cmdHistory.unshift(cmd);
-      historyIdx = -1;
-      const lower = cmd.toLowerCase();
-      const parts = lower.split(/\s+/);
-
-      if (lower === 'help') {
-        printTerm('Available commands:', 'term-accent');
-        printTerm('  help             Show this command list');
-        printTerm('  neofetch         Show Lunar DE specs');
-        printTerm('  ls               List Lunar_DE workspace files');
-        printTerm('  layout top       Switch panel to Top Bar');
-        printTerm('  layout win11     Switch panel to Windows 11 Taskbar');
-        printTerm('  wallpaper <1-8>  Switch desktop background (1..8)');
-        printTerm('  appearance       Open Appearance Settings window');
-        printTerm('  ./run_dev.sh -m 2 Simulate dual virtual RandR monitor launch');
-        printTerm('  clear            Clear terminal output');
-      } else if (lower === 'clear') {
-        termOutput.innerHTML = '';
-      } else if (lower === 'ls') {
-        printTerm('CMakeLists.txt  README.md  assets/  config/  docs/  install.sh  run_dev.sh  scripts/  src/  antigravity-plugin/');
-      } else if (lower === 'neofetch') {
-        const wp = WALLPAPERS.find((w) => w.id === currentWpIndex) || WALLPAPERS[0];
-        const art = [
-          '      _..._        lunar@desktop',
-          '    .::   ::.      -------------',
-          '   ::       ::     DE: Lunar DE (C++20 / libxcb)',
-          '   ::              WM: lunar-wm (Aero Snap + RandR)',
-          '    `::   ::\'      Bar: ' + (currentLayout === 'taskbar' ? 'Windows 11 Taskbar (44px)' : 'Top Bar (28px)'),
-          '      `---\'\'       Wallpaper: ' + wp.name + ' (' + wp.id + '/8)',
-          '                   Viewport: ' + Math.round(canvas.clientWidth) + 'x' + Math.round(canvas.clientHeight)
-        ];
-        art.forEach((ln) => printTerm(ln, 'term-accent'));
-      } else if (lower === 'layout top' || lower === 'layout topbar') {
-        setLayout('top');
-        printTerm('[lunar] Switched panel layout -> Top Bar (28px).', 'term-accent');
-      } else if (lower === 'layout win11' || lower === 'layout taskbar') {
-        setLayout('taskbar');
-        printTerm('[lunar] Switched panel layout -> Windows 11 Taskbar (44px).', 'term-accent');
-      } else if (parts[0] === 'wallpaper') {
-        const num = parseInt(parts[1], 10);
-        if (isNaN(num) || num < 1 || num > 8) {
-          printTerm('Usage: wallpaper <1-8>', 'term-muted');
-        } else {
-          const wp = setWallpaperByIndex(num);
-          printTerm('[lunar] Wallpaper set -> ' + wp.id + ' (' + wp.name + ')', 'term-accent');
-        }
-      } else if (lower === 'appearance') {
-        vmLaunchApp('appearance');
-        printTerm('[lunar] Opened Appearance Settings.', 'term-accent');
-      } else if (lower === './run_dev.sh -m 2' || lower === './run_dev.sh') {
-        printTerm('[lunar] Building Release binaries lunar-wm & lunar-panel...', 'term-muted');
-        if (lower.includes('-m 2')) {
-          printTerm('[lunar] Starting Xephyr on :2 (1920x640, 2 virtual monitors)...', 'term-muted');
-          printTerm('[lunar] Mounted VMon-0 (960x640+0+0) & VMon-1 (960x640+960+0).', 'term-accent');
-        } else {
-          printTerm('[lunar] Starting Xephyr on :2 (1280x720, resizeable)...', 'term-muted');
-        }
-        printTerm('[lunar] Lunar DE is live on DISPLAY=:2!', 'term-green');
-      } else {
-        printTerm("Command not found: '" + cmd + "'. Type 'help' for commands.", 'term-muted');
-      }
-    }
-
-    termBody.addEventListener('click', () => termInput.focus());
-    termInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        const val = termInput.value;
-        termInput.value = '';
-        runTermCommand(val);
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        if (historyIdx + 1 < cmdHistory.length) {
-          historyIdx++;
-          termInput.value = cmdHistory[historyIdx];
-        }
-      } else if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        if (historyIdx > 0) {
-          historyIdx--;
-          termInput.value = cmdHistory[historyIdx];
-        } else {
-          historyIdx = -1;
-          termInput.value = '';
-        }
-      }
-    });
-
-    // Install Tabs & Clipboard Copy
-    function switchInstallTab(tab) {
-      const isApt = tab === 'apt';
-      document.getElementById('tab-apt').classList.toggle('active', isApt);
-      document.getElementById('tab-source').classList.toggle('active', !isApt);
-      document.getElementById('panel-apt').classList.toggle('active', isApt);
-      document.getElementById('panel-source').classList.toggle('active', !isApt);
-    }
-
-    function copyCode(codeId, btn) {
-      const text = document.getElementById(codeId).textContent.trim();
-      const done = () => {
-        btn.textContent = 'Copied!';
-        btn.classList.add('copied');
-        setTimeout(() => {
-          btn.textContent = 'Copy';
-          btn.classList.remove('copied');
-        }, 1800);
+    } else if (vm.activeApp === 'terminal') {
+      const themeColors = {
+        midnight: ['#090d18', '#38bdf8'], aurora: ['#061311', '#10b981'],
+        cyber: ['#0e0617', '#ec4899'], solar: ['#120a05', '#f59e0b'], frost: ['#0a1220', '#60a5fa'],
       };
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text).then(done).catch(() => fallbackCopy(text, done));
-      } else {
-        fallbackCopy(text, done);
+      const [bgc, ac] = themeColors[vm.termTheme] || themeColors.midnight;
+      vmWinTitle.textContent = `Lunar Terminal (${vm.termTheme}) — ${vm.name}`;
+      vmWinBody.innerHTML = `
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">
+          ${Object.keys(themeColors).map(t => `<button class="chip-btn ${vm.termTheme === t ? 'active' : ''}" data-tt="${t}">${t}</button>`).join('')}
+        </div>
+        <div style="background:${bgc};border:1px solid ${ac};border-radius:8px;padding:10px;font-family:var(--mono);min-height:210px;">
+          ${vm.termLogs.map(l => `<div style="margin-bottom:4px;">${l}</div>`).join('')}
+          <div style="display:flex;gap:6px;margin-top:8px;">
+            <span style="color:${ac};font-weight:700;">lunar ❯</span>
+            <input id="vmTermIn" type="text" placeholder="help, neofetch, live warp, theme aurora, clear" style="flex:1;background:transparent;border:none;color:#fff;font-family:var(--mono);outline:none;font-size:12px;">
+          </div>
+        </div>`;
+      vmWinBody.querySelectorAll('[data-tt]').forEach(b => b.onclick = () => { vm.termTheme = b.getAttribute('data-tt'); syncUI(); });
+      const tin = vmWinBody.querySelector('#vmTermIn');
+      tin.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter') return;
+        const cmd = tin.value.trim();
+        if (!cmd) return;
+        vm.termLogs.push(`lunar ❯ ${cmd}`);
+        if (cmd === 'clear') vm.termLogs = [];
+        else if (cmd === 'help') vm.termLogs.push('Commands: neofetch | live <aurora|matrix|bio|snow|cyber|warp> | theme <midnight|aurora|cyber|solar|frost> | lunar-win <text>');
+        else if (cmd === 'neofetch') vm.termLogs.push(`OS: Lunar DE v1.0.25 (${vm.name}) • WM: lunar-wm (4 workspaces + Alt+Tab) • Notify: lunar-notify • Panel: ${vm.layout}`);
+        else if (cmd.startsWith('live ')) { vm.liveScene = cmd.slice(5).trim(); vm.termLogs.push(`Switched live wallpaper -> ${vm.liveScene}`); }
+        else if (cmd.startsWith('theme ')) { vm.termTheme = cmd.slice(6).trim(); }
+        else if (cmd.startsWith('lunar-win ')) { vm.bgAppLog.push(`[lunar-win] Sent to sober: ${cmd.slice(10)}`); vm.termLogs.push('Dispatched background input cleanly without stealing focus.'); }
+        else vm.termLogs.push(`ok: ${cmd}`);
+        syncUI();
+      });
+    } else {
+      vmWinTitle.textContent = `lunar-win Background App Control — ${vm.name}`;
+      vmWinBody.innerHTML = `
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div style="padding:10px;border-radius:10px;background:#090d18;border:1px solid var(--border);">
+            <strong style="color:var(--emerald);">Focused Foreground Window</strong>
+            <p style="font-size:11px;color:var(--muted);">Type here normally — focus never jumps:</p>
+            <textarea style="width:100%;height:96px;background:#111827;color:#fff;border:1px solid var(--border);border-radius:8px;padding:8px;font-size:12px;">${vm.fgFocusText}</textarea>
+            <div style="margin-top:8px;display:flex;gap:6px;">
+              <button class="chip-btn active" id="demoSendBtn">Send 'w:hold:1.0' to Sober</button>
+            </div>
+          </div>
+          <div style="padding:10px;border-radius:10px;background:#090d18;border:1px solid var(--border);">
+            <strong style="color:var(--pink);">Background Window: sober</strong>
+            <p style="font-size:11px;color:var(--muted);">Receives virtual input while unfocused:</p>
+            <div style="font-family:var(--mono);font-size:11px;color:#cbd5e1;max-height:130px;overflow:auto;">
+              ${vm.bgAppLog.map(x => `<div>${x}</div>`).join('')}
+            </div>
+          </div>
+        </div>`;
+      vmWinBody.querySelector('#demoSendBtn').onclick = () => {
+        vm.bgAppLog.push(`[${new Date().toLocaleTimeString()}] Virtual key w held 1.0s (focus untouched)`);
+        renderWinContent();
+      };
+    }
+  }
+
+  function syncUI() {
+    const vm = curVM();
+    renderTabs();
+    engineBtnA.classList.toggle('active', vm.engine === 'A');
+    engineBtnB.classList.toggle('active', vm.engine === 'B');
+    engineAPane.style.display = vm.engine === 'A' ? 'block' : 'none';
+    engineBPane.classList.toggle('active', vm.engine === 'B');
+
+    dualHeadBtn.textContent = vm.dualMonitors ? 'Monitors: 2 Heads' : 'Monitors: 1 Head';
+    dualHeadBtn.classList.toggle('active', vm.dualMonitors);
+    vmMonSplit.classList.toggle('dual', vm.dualMonitors);
+    vmMon1.style.display = vm.dualMonitors ? 'block' : 'none';
+
+    panelGlassBtn.textContent = `Panel Live Glass: ${vm.panelGlass ? 'ON' : 'OFF'}`;
+    panelGlassBtn.classList.toggle('active', vm.panelGlass);
+    vmLayoutSelect.value = vm.layout;
+    vmLiveSelect.value = vm.liveScene;
+
+    vmPanel.className = 'vm-panel ' +
+      (vm.panelGlass ? 'glass ' : '') +
+      (vm.layout === 'top' || vm.layout === 'taskbar-top' ? 'top' : (vm.layout === 'floating-dock' ? 'dock' : 'bottom')) +
+      (vm.layout.includes('taskbar') ? ' centered' : '');
+    panelLayoutTag.textContent = vm.layout;
+
+    pausePill0.textContent = vm.m1Fullscreen ? 'Monitor 1: Paused (Fullscreen)' : 'Monitor 1: Running';
+    pausePill0.classList.toggle('paused', vm.m1Fullscreen);
+    vmAppGrid.classList.toggle('open', vm.appGridOpen);
+    phonePairedBadge.textContent = `● Paired to ${vm.name}`;
+    phoneVolSlider.value = vm.volume;
+    phoneVolLbl.textContent = `${vm.volume}%`;
+    renderWinContent();
+  }
+
+  // Toolbar & Desktop Events
+  engineBtnA.onclick = () => { curVM().engine = 'A'; syncUI(); };
+  engineBtnB.onclick = () => { curVM().engine = 'B'; syncUI(); };
+  dualHeadBtn.onclick = () => { curVM().dualMonitors = !curVM().dualMonitors; syncUI(); resizeCanvases(); };
+  panelGlassBtn.onclick = () => { curVM().panelGlass = !curVM().panelGlass; syncUI(); };
+  vmLayoutSelect.onchange = () => { curVM().layout = vmLayoutSelect.value; syncUI(); };
+  vmLiveSelect.onchange = () => { curVM().liveScene = vmLiveSelect.value; syncUI(); };
+  vmAppGridBtn.onclick = () => { curVM().appGridOpen = !curVM().appGridOpen; syncUI(); };
+  document.getElementById('panelAppsBtn').onclick = () => { curVM().appGridOpen = !curVM().appGridOpen; syncUI(); };
+  document.getElementById('openTestAppBtn').onclick = () => { curVM().activeApp = 'testing'; syncUI(); };
+  document.getElementById('openTermAppBtn').onclick = () => { curVM().activeApp = 'terminal'; syncUI(); };
+  document.getElementById('openWinDemoBtn').onclick = () => { curVM().activeApp = 'lunar-win'; syncUI(); };
+  document.getElementById('iconTesting').onclick = () => { curVM().activeApp = 'testing'; syncUI(); };
+  document.getElementById('iconTerminal').onclick = () => { curVM().activeApp = 'terminal'; syncUI(); };
+  document.getElementById('iconFsToggle').onclick = () => { curVM().m1Fullscreen = !curVM().m1Fullscreen; syncUI(); };
+  document.getElementById('iconBgInput').onclick = () => { curVM().activeApp = 'lunar-win'; syncUI(); };
+  document.getElementById('winFsBtn').onclick = () => { curVM().m1Fullscreen = !curVM().m1Fullscreen; syncUI(); };
+
+  vmAppGrid.querySelectorAll('[data-launch]').forEach(el => {
+    el.onclick = () => {
+      const act = el.getAttribute('data-launch');
+      curVM().appGridOpen = false;
+      if (act !== 'close') curVM().activeApp = act;
+      syncUI();
+    };
+  });
+
+  document.querySelectorAll('[data-vm-wp]').forEach(card => {
+    card.addEventListener('click', () => {
+      curVM().liveScene = card.getAttribute('data-vm-wp');
+      syncUI();
+      showToast(`Applied live wallpaper "${curVM().liveScene}" inside ${curVM().name}`);
+      document.getElementById('vm-studio').scrollIntoView({ behavior: 'smooth' });
+    });
+  });
+
+  // Phone Connect Controls driving active VM
+  phoneVolSlider.oninput = () => {
+    curVM().volume = Number(phoneVolSlider.value);
+    phoneVolLbl.textContent = `${curVM().volume}%`;
+  };
+  document.getElementById('phoneToggleLiveBtn').onclick = () => {
+    const order = ['aurora', 'matrix', 'bio', 'snow', 'cyber', 'warp', 'moon', 'hex', 'pulsar'];
+    const vm = curVM();
+    vm.liveScene = order[(order.indexOf(vm.liveScene) + 1) % order.length];
+    syncUI();
+    showToast(`Phone -> ${vm.name}: switched live wallpaper to ${vm.liveScene}`);
+  };
+  document.getElementById('phoneGlassBtn').onclick = () => { curVM().panelGlass = !curVM().panelGlass; syncUI(); };
+  document.getElementById('phoneAppGridBtn').onclick = () => { curVM().appGridOpen = !curVM().appGridOpen; syncUI(); };
+  document.getElementById('phoneNotifyBtn').onclick = () => showToast(`Notification pushed from Phone -> ${curVM().name}!`);
+  document.getElementById('phoneSendBgBtn').onclick = () => {
+    const txt = document.getElementById('phoneBgInput').value.trim();
+    if (!txt) return;
+    const vm = curVM();
+    vm.bgAppLog.push(`[Android Connect -> lunar-win] ${txt}`);
+    vm.activeApp = 'lunar-win';
+    syncUI();
+    showToast(`Phone sent "${txt}" to background app on ${vm.name}`);
+  };
+
+  // Virtual touchpad pointer tracking -> VM cursor
+  const pad = document.getElementById('phoneTouchpad');
+  const dot = document.getElementById('touchpadDot');
+  const vmCursor = document.getElementById('vmCursor');
+  let padDown = false;
+  function movePad(e) {
+    const rect = pad.getBoundingClientRect();
+    const px = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    const py = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
+    dot.style.display = 'block';
+    dot.style.left = `${px * 100}%`;
+    dot.style.top = `${py * 100}%`;
+    vmCursor.style.left = `${10 + px * 80}%`;
+    vmCursor.style.top = `${10 + py * 80}%`;
+  }
+  pad.addEventListener('pointerdown', (e) => { padDown = true; movePad(e); });
+  pad.addEventListener('pointermove', (e) => { if (padDown) movePad(e); });
+  window.addEventListener('pointerup', () => { padDown = false; });
+
+  // Engine B: Real Per-Instance v86 x86 WebAssembly VM Loader
+  const v86Instances = new Map();
+  const v86Screen = document.getElementById('v86Screen');
+  const v86Status = document.getElementById('v86StatusText');
+  function loadV86Script() {
+    if (window.V86 || window.V86Starter) return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = 'https://copy.sh/v86/build/libv86.js';
+      s.onload = () => resolve();
+      s.onerror = () => reject(new Error('Could not reach copy.sh/v86 CDN (offline or blocked)'));
+      document.head.appendChild(s);
+    });
+  }
+  document.getElementById('v86BootBtn').onclick = async () => {
+    const vm = curVM();
+    v86Status.textContent = `Loading libv86 WebAssembly for ${vm.name}...`;
+    try {
+      await loadV86Script();
+      const Ctor = window.V86 || window.V86Starter;
+      v86Screen.innerHTML = '<div style="white-space:pre;font:14px monospace;line-height:14px;"></div><canvas></canvas>';
+      const emu = new Ctor({
+        wasm_path: 'https://copy.sh/v86/build/v86.wasm',
+        memory_size: 32 * 1024 * 1024,
+        vga_memory_size: 2 * 1024 * 1024,
+        screen_container: v86Screen,
+        bios: { url: 'https://copy.sh/v86/bios/seabios.bin' },
+        vga_bios: { url: 'https://copy.sh/v86/bios/vgabios.bin' },
+        fda: { url: 'https://copy.sh/v86/images/kolibri.img' },
+        autostart: true,
+      });
+      v86Instances.set(vm.id, emu);
+      v86Status.textContent = `Running live v86 x86 instance for ${vm.name}`;
+    } catch (err) {
+      v86Status.textContent = 'v86 CDN unavailable here — local Lunar Xephyr Sandbox still available via `lunar-sandbox`';
+      v86Screen.innerHTML = `<div style="text-align:center;padding:18px;font-size:13px;color:var(--muted);">
+        <strong style="color:#f87171;">Unable to fetch remote v86 WebAssembly image</strong>
+        <p>${err.message}</p>
+        <p>Switch back to <strong>Engine A: Lunar DE VM</strong> for instant zero-network testing, or run <code>lunar-settings --page testing</code> locally.</p>
+      </div>`;
+    }
+  };
+  document.getElementById('v86StopBtn').onclick = () => {
+    const vm = curVM();
+    const emu = v86Instances.get(vm.id);
+    if (emu && typeof emu.destroy === 'function') emu.destroy();
+    v86Instances.delete(vm.id);
+    v86Status.textContent = 'Stopped';
+    v86Screen.innerHTML = '<span style="color:var(--muted);font-size:13px;">Instance powered off.</span>';
+  };
+
+  // Multi-Monitor Live Wallpaper Canvas Renderer inside Engine A
+  const c0 = document.getElementById('vmCanvas0');
+  const c1 = document.getElementById('vmCanvas1');
+  const ctx0 = c0.getContext('2d');
+  const ctx1 = c1.getContext('2d');
+  function resizeCanvases() {
+    [c0, c1].forEach(c => {
+      const p = c.parentElement;
+      if (p && p.clientWidth > 0) { c.width = p.clientWidth; c.height = p.clientHeight; }
+    });
+  }
+  window.addEventListener('resize', resizeCanvases);
+  resizeCanvases();
+
+  function drawScene(ctx, w, h, scene, t) {
+    if (!w || !h) return;
+    if (scene === 'matrix') {
+      ctx.fillStyle = '#030a06'; ctx.fillRect(0, 0, w, h);
+      ctx.font = 'bold 13px monospace';
+      for (let x = 8; x < w; x += 22) {
+        const y = ((t * 95 + x * 7) % (h + 120)) - 20;
+        for (let k = 0; k < 8; k++) {
+          ctx.fillStyle = k === 0 ? '#ecfdf5' : `rgba(16,185,129,${(1 - k / 8) * 0.7})`;
+          ctx.fillText(String.fromCharCode(48 + ((x + k + Math.floor(t * 6)) % 42)), x, y - k * 16);
+        }
+      }
+    } else if (scene === 'cyber') {
+      ctx.fillStyle = '#090514'; ctx.fillRect(0, 0, w, h);
+      ctx.lineWidth = 2;
+      for (let i = 0; i < 40; i++) {
+        const x = ((i * 53) % w);
+        const y = ((t * 160 + i * 71) % (h + 40)) - 20;
+        ctx.strokeStyle = i % 2 ? 'rgba(236,72,153,0.65)' : 'rgba(34,211,238,0.65)';
+        ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - 4, y + 26); ctx.stroke();
+      }
+    } else if (scene === 'snow') {
+      ctx.fillStyle = '#071324'; ctx.fillRect(0, 0, w, h);
+      for (let i = 0; i < 60; i++) {
+        const x = (Math.sin(t * 0.8 + i) * 14 + (i * 39)) % w;
+        const y = (t * 40 + i * 29) % h;
+        ctx.fillStyle = 'rgba(224,242,254,0.75)';
+        ctx.beginPath(); ctx.arc(x < 0 ? x + w : x, y, 2 + (i % 3), 0, Math.PI * 2); ctx.fill();
+      }
+    } else if (scene === 'warp') {
+      ctx.fillStyle = '#03050c'; ctx.fillRect(0, 0, w, h);
+      for (let i = 0; i < 70; i++) {
+        const a = i * 2.3999;
+        const z = ((1 - ((t * 0.35 + i * 0.13) % 1)) * 0.9 + 0.08);
+        const r = Math.min(w, h) * 0.48 / z;
+        ctx.strokeStyle = i % 2 ? 'rgba(96,165,250,0.7)' : 'rgba(196,181,253,0.7)';
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.moveTo(w / 2 + Math.cos(a) * r * 0.25, h / 2 + Math.sin(a) * r * 0.25);
+        ctx.lineTo(w / 2 + Math.cos(a) * r * 0.32, h / 2 + Math.sin(a) * r * 0.32);
+        ctx.stroke();
+      }
+    } else if (scene === 'moon') {
+      ctx.fillStyle = '#140511'; ctx.fillRect(0, 0, w, h);
+      ctx.fillStyle = 'rgba(251,113,133,0.22)';
+      ctx.beginPath(); ctx.arc(w * 0.56, h * 0.45, Math.min(w, h) * 0.28, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#fb7185';
+      ctx.beginPath(); ctx.arc(w * 0.56, h * 0.45 - Math.sin(t * 0.25) * 6, Math.min(w, h) * 0.14, 0, Math.PI * 2); ctx.fill();
+    } else if (scene === 'hex') {
+      ctx.fillStyle = '#041019'; ctx.fillRect(0, 0, w, h);
+      ctx.strokeStyle = 'rgba(45,212,191,0.38)'; ctx.lineWidth = 1.2;
+      const wx = ((t * 90) % (w + 160)) - 80;
+      for (let y = 16; y < h; y += 36) for (let x = 20; x < w; x += 42) {
+        ctx.strokeStyle = Math.abs(x - wx) < 75 ? 'rgba(94,234,212,0.72)' : 'rgba(45,212,191,0.22)';
+        ctx.strokeRect(x, y, 22, 22);
+      }
+    } else if (scene === 'pulsar') {
+      ctx.fillStyle = '#040614'; ctx.fillRect(0, 0, w, h);
+      const a = t * 0.9, cx = w * 0.5, cy = h * 0.5;
+      ctx.strokeStyle = 'rgba(96,165,250,0.75)'; ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.moveTo(cx - Math.cos(a) * 140, cy - Math.sin(a) * 140); ctx.lineTo(cx + Math.cos(a) * 140, cy + Math.sin(a) * 140); ctx.stroke();
+      ctx.fillStyle = '#eff6ff'; ctx.beginPath(); ctx.arc(cx, cy, 8, 0, Math.PI * 2); ctx.fill();
+    } else { // aurora & bio
+      const g = ctx.createLinearGradient(0, 0, w, h);
+      g.addColorStop(0, scene === 'bio' ? '#041428' : '#040a18');
+      g.addColorStop(1, '#091529');
+      ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+      for (let b = 0; b < 3; b++) {
+        ctx.strokeStyle = b === 0 ? 'rgba(16,185,129,0.34)' : (b === 1 ? 'rgba(34,211,238,0.28)' : 'rgba(167,139,250,0.25)');
+        ctx.lineWidth = 34;
+        ctx.beginPath();
+        for (let x = 0; x <= w; x += 18) {
+          const y = h * (0.3 + b * 0.14) + Math.sin(x * 0.01 + t * (0.7 + b * 0.2) + b) * 32;
+          if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
       }
     }
+  }
 
-    function fallbackCopy(text, cb) {
-      const ta = document.createElement('textarea');
-      ta.value = text;
-      ta.style.position = 'fixed';
-      ta.style.opacity = '0';
-      document.body.appendChild(ta);
-      ta.select();
-      try { document.execCommand('copy'); } catch (e) {}
-      document.body.removeChild(ta);
-      cb();
+  let t0 = 0, t1 = 0, prevMs = performance.now();
+  function animLoop(now) {
+    requestAnimationFrame(animLoop);
+    if (now - prevMs < 33) return;
+    const dt = Math.min(0.05, (now - prevMs) * 0.001);
+    prevMs = now;
+    const vm = curVM();
+    if (!vm.m1Fullscreen) t0 = (t0 + dt) % 86400;
+    t1 = (t1 + dt) % 86400;
+    if (vm.engine === 'A') {
+      drawScene(ctx0, c0.width, c0.height, vm.liveScene, t0);
+      if (vm.dualMonitors) drawScene(ctx1, c1.width, c1.height, vm.liveScene, t1);
     }
-
-    function updateClock() {
-      const now = new Date();
-      const mon = now.toLocaleString('en-US', { month: 'short' }).toLowerCase();
-      const day = now.getDate();
-      const hh = String(now.getHours()).padStart(2, '0');
-      const mm = String(now.getMinutes()).padStart(2, '0');
-      const txt = mon + ' ' + day + '  ' + hh + ':' + mm;
-      document.getElementById('mock-clock').textContent = txt;
-      document.getElementById('mock-clock-right').textContent = txt;
-    }
-
-    // Boot VM
-    initAppearanceGrid();
-    setupWindowInteractions();
-    renderWindow(windows.terminal);
-    focusWindow('terminal');
-    updateClock();
-    setInterval(updateClock, 15000);
-    window.addEventListener('resize', () => {
-      Object.values(windows).forEach((w) => {
-        if (!w.closed && !w.minimized) applyWindowRect(w);
-      });
-    });
-
-    printTerm('Lunar DE Interactive Shell v1.0', 'term-accent');
-    printTerm("Try 'help', 'neofetch', 'layout win11', or 'wallpaper 4'.", 'term-muted');
-  </script>
+  }
+  requestAnimationFrame(animLoop);
+  setInterval(() => {
+    const el = document.getElementById('vmClock');
+    if (el) el.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }, 5000);
+  syncUI();
+})();
+</script>
 </body>
 </html>
