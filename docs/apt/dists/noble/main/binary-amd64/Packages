@@ -257,6 +257,37 @@ Description: Minimal modular C++20 X11 Desktop Environment
  pause, Gemini Live voice integration (Super+Shift+G), and boot auto-updates.
 
 Package: lunar-de
+Version: 1.0.25
+Architecture: amd64
+Maintainer: Lunar Entertainment <lunar@users.noreply.github.com>
+Installed-Size: 5064
+Depends: libc6, libstdc++6, libdbus-1-3, libxcb1, libxcb-util1, libxcb-ewmh2, libxcb-icccm4, libxcb-keysyms1, libxcb-randr0, libxkbcommon0, libjpeg-turbo8 | libjpeg8, libpng16-16t64 | libpng16-16, libfontconfig1, libfreetype6, picom, python3, python3-gi, python3-gi-cairo, python3-websockets, gir1.2-gtk-3.0, x11-xserver-utils, xdotool, pulseaudio-utils, lunar-de-wallpapers-1 (>= 1.0.12), lunar-de-wallpapers-2 (>= 1.0.12), lunar-de-wallpapers-3 (>= 1.0.12)
+Recommends: ffmpeg, wmctrl, xclip, xinput, playerctl, libnotify-bin, mpv, gir1.2-webkit2-4.1 | gir1.2-webkit2-4.0, gir1.2-vte-2.91, xserver-xephyr
+Filename: pool/main/lunar-de_1.0.25_amd64.deb
+Size: 2196758
+MD5sum: d3fe88b82d73700c1ba7f4df98634d6c
+SHA1: 0b33d193bd251be31e924541cfa8ebf0e1f26adc
+SHA256: 3518cba006ea77e24b3f4ced012e38f8fa3cdbfc2910f35f1e3e2be7cfd287ba
+Section: x11
+Priority: optional
+Homepage: https://lunar-entertainment.github.io/Lunar_DE/
+Description: Minimal modular C++20 X11 Desktop Environment
+ Lunar DE is built from scratch in C++20 directly on libxcb and libdbus-1,
+ featuring multi-monitor RandR support, Aero Snap, 6 panel & dock layouts
+ with merged draggable taskbar icons, native D-Bus notification daemon
+ (lunar-notify) with glassmorphism toasts & slide-out Notification Center
+ with Do Not Disturb, translucent live-wallpaper taskbar & Frosted App
+ Grid, Allow Apps Over Taskbar mode with edge reveal, Background Apps viewer
+ & quick closer, Lunar Settings with Testing Sandbox VM (Xephyr), toggleable
+ window borders & titlebars, configurable shortcuts, Alt+F2 Command Palette
+ with area screenshot & screen recording, targeted background window
+ automation (lunar-win), custom skinned Lunar Terminal (5 themes), Lunar DE
+ Connect Android companion daemon with notification mirroring, 60 Hz UDP
+ touchpad & opt-in screen viewer, 48 lossless 2K PNG wallpapers, 32
+ stabilized live wallpapers with per-monitor fullscreen pause, Gemini Live
+ voice integration (Super+Shift+G), and boot auto-updates.
+
+Package: lunar-de
 Version: 1.0.3
 Architecture: amd64
 Maintainer: Lunar Entertainment <lunar@users.noreply.github.com>
